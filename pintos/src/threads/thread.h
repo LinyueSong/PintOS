@@ -7,6 +7,17 @@
 #include "threads/synch.h"
 #include "threads/fixed-point.h"
 
+struct thread_context {
+   char *cmd_line;             /* Filename + args */
+   tid_t thread_pid;           /* Thread id / proceess id of the thread */
+   struct semaphore sema;      /* The semaphore used to wait for child thread finish loading */
+   struct lock lock;           /* Lock for ref_cnt */
+   int ref_cnt;                /* An indicator for how many threads still hold a reference to this struct. Initialized to 2*/
+   bool load_success;          /* Boolean indicates whether the child process loaded sucessfully */
+   int status;                 /* Child process exit code. Initialized to -1 */
+   struct list_elem elem;
+};
+
 /* States in a thread's life cycle. */
 enum thread_status {
   THREAD_RUNNING, /* Running thread. */
@@ -89,6 +100,8 @@ struct thread {
   uint8_t* stack;            /* Saved stack pointer. */
   int priority;              /* Priority. */
   struct list_elem allelem;  /* List element for all threads list. */
+  struct list children;      /* List of children thread_context */
+  struct thread_context* self; /* Keep a pointer to self thread_context */
 
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */

@@ -27,29 +27,63 @@ static bool load(const char* cmdline, void (**eip)(void), void** esp);
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
    thread id, or TID_ERROR if the thread cannot be created. */
-tid_t process_execute(const char* file_name) {
+tid_t process_execute(const char* cmd_line) {
   char* fn_copy;
   tid_t tid;
 
-  sema_init(&temporary, 0);
-  /* Make a copy of FILE_NAME.
-     Otherwise there's a race between the caller and load(). */
-  fn_copy = palloc_get_page(0);
-  if (fn_copy == NULL)
+  /* Allocate memory for a thread context struct */
+  struct thread_context *context = (struct thread_context*) malloc(sizeof(struct thread_context));
+  if (context == NULL) {
     return TID_ERROR;
-  strlcpy(fn_copy, file_name, PGSIZE);
+  }
+  /* Make a copy of FILE_NAME. Otherwise there's a race between the caller and load(). */
+  fn_copy = palloc_get_page(0);
+  if (fn_copy == NULL) return TID_ERROR;
+  strlcpy(fn_copy, cmd_line, PGSIZE);
 
+  /* Initialize the members of the thread context struct */
+  context -> cmd_line = fn_copy;
+  context -> ref_cnt = 0;
+  sema_init(&(context -> sema), 0);
+  
+  /*  Get the thread name for thread_create */
+  char *token, *save_ptr;
+  char* file_name = strtok_r (cmd_line, " ", &save_ptr); 
+  
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create(file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
+  tid = thread_create(file_name, PRI_DEFAULT, start_process, context);
+
+  /* If thread_create function fails, free necessary memory */
+  if (tid == TID_ERROR) {
     palloc_free_page(fn_copy);
+    free(context);
+  } else {
+    /* Wait for the loading of child process executable done. */
+    sema_down(&(context->sema));
+    
+    if (!context->load_success) {
+      /* Load failed. */
+      palloc_free_page(fn_copy);
+      tid = TID_ERROR;
+    } else {
+      /* Load succeeded */
+      list_push_back(&(thread_current()->children), &(context->elem));
+    }
+  }
   return tid;
 }
 
 /* A thread function that loads a user process and starts it
    running. */
-static void start_process(void* file_name_) {
-  char* file_name = file_name_;
+static void start_process(void* context_) {
+  struct thread_context *context = (struct thread_context*) context;
+
+  /* Get the executable name first */
+  char buff[strlen(context->cmd_line)+1];
+  strcpy(buff, context->cmd_line);
+  char *save_ptr;
+  char* file_name = strtok_r (buff, " ", &save_ptr);
+  
   struct intr_frame if_;
   bool success;
 
@@ -61,9 +95,24 @@ static void start_process(void* file_name_) {
   success = load(file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  palloc_free_page(file_name);
   if (!success)
+    context->load_success = false;
+    sema_up(&(context->sema));
     thread_exit();
+
+  /* Push arguments */
+  push_args(context->cmd_line, &if_);
+
+  /* Set thread_context fields*/
+  context->thread_pid = thread_current()->tid;
+  context->load_success = true;
+  lock_init(&(context -> lock));
+  context -> ref_cnt = 2;
+  context -> status = -1;
+  thread_current()->self = context;
+
+  /* Notify the parent process that loading is done */
+  sema_up(&(context->sema));
 
   /* Start the user process by simulating a return from an
      interrupt, implemented by intr_exit (in
@@ -424,4 +473,46 @@ static bool install_page(void* upage, void* kpage, bool writable) {
      address, then map our page there. */
   return (pagedir_get_page(t->pagedir, upage) == NULL &&
           pagedir_set_page(t->pagedir, upage, kpage, writable));
+}
+
+/* Push the arguments on to stack */
+void push_args(char* cmd_line, struct intr_frame *if_) {
+  char *token, *save_ptr;
+  char* argv[10];
+  int argc = 0;
+  /* Parse and push the args(strings) onto stack */
+    for (token = strtok_r (cmd_line, " ", &save_ptr); token != NULL;
+          token = strtok_r (NULL, " ", &save_ptr)) {
+            int length = strlen(token) + 1;
+            if_->esp -= length;
+            memcpy(if_->esp, token, length);
+            argv[argc] = if_->esp;
+            argc ++;
+          };
+    /* Stack-alignment */
+    if_->esp -= ((int)if_->esp + 4 * (1 - argc)) % 16;
+
+    /* Push the null sentinel */
+    if_->esp -= 4;
+    *(char*) if_->esp = NULL;
+
+    /* Push address of arguments in reverse order */
+    for (int i = argc-1; i >= 0; i--) {
+      if_->esp -= 4;
+      memcpy(if_->esp, &argv[i], 4);
+    }
+
+    /* Push address of argv */
+    if_->esp -= 4;
+    int argv_addr = if_->esp + 4;
+    memcpy(if_->esp, &argv_addr, 4);
+
+    /* Push address of argc */
+    if_->esp -= 4;
+    memcpy(if_->esp, &argc, 4);
+
+    /* Push a fake return address */
+    if_->esp -= 4;
+    int fake_eip = NULL;
+    memcpy(if_->esp, &fake_eip, 4);
 }
