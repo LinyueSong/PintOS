@@ -15,6 +15,7 @@
 #include "threads/init.h"
 #include "threads/interrupt.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
@@ -22,6 +23,7 @@
 static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static bool load(const char* cmdline, void (**eip)(void), void** esp);
+void push_args(char* cmd_line, struct intr_frame* if_);
 
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
@@ -30,26 +32,28 @@ static bool load(const char* cmdline, void (**eip)(void), void** esp);
 tid_t process_execute(const char* cmd_line) {
   char* fn_copy;
   tid_t tid;
+  sema_init(&temporary, 0);
 
   /* Allocate memory for a thread context struct */
-  struct thread_context *context = (struct thread_context*) malloc(sizeof(struct thread_context));
+  struct thread_context* context = (struct thread_context*)malloc(sizeof(struct thread_context));
   if (context == NULL) {
     return TID_ERROR;
   }
   /* Make a copy of FILE_NAME. Otherwise there's a race between the caller and load(). */
   fn_copy = palloc_get_page(0);
-  if (fn_copy == NULL) return TID_ERROR;
+  if (fn_copy == NULL)
+    return TID_ERROR;
   strlcpy(fn_copy, cmd_line, PGSIZE);
 
   /* Initialize the members of the thread context struct */
-  context -> cmd_line = fn_copy;
-  context -> ref_cnt = 0;
-  sema_init(&(context -> sema), 0);
-  
+  context->cmd_line = fn_copy;
+  context->ref_cnt = 0;
+  sema_init(&(context->sema), 0);
+
   /*  Get the thread name for thread_create */
   char *token, *save_ptr;
-  char* file_name = strtok_r (cmd_line, " ", &save_ptr); 
-  
+  char* file_name = strtok_r(cmd_line, " ", &save_ptr);
+
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(file_name, PRI_DEFAULT, start_process, context);
 
@@ -60,7 +64,7 @@ tid_t process_execute(const char* cmd_line) {
   } else {
     /* Wait for the loading of child process executable done. */
     sema_down(&(context->sema));
-    
+
     if (!context->load_success) {
       /* Load failed. */
       palloc_free_page(fn_copy);
@@ -76,14 +80,14 @@ tid_t process_execute(const char* cmd_line) {
 /* A thread function that loads a user process and starts it
    running. */
 static void start_process(void* context_) {
-  struct thread_context *context = (struct thread_context*) context;
+  struct thread_context* context = (struct thread_context*)context_;
 
   /* Get the executable name first */
-  char buff[strlen(context->cmd_line)+1];
-  strcpy(buff, context->cmd_line);
-  char *save_ptr;
-  char* file_name = strtok_r (buff, " ", &save_ptr);
-  
+  char buff[strlen(context->cmd_line) + 1];
+  strlcpy(buff, context->cmd_line, strlen(context->cmd_line) + 1);
+  char* save_ptr;
+  char* file_name = strtok_r(buff, " ", &save_ptr);
+
   struct intr_frame if_;
   bool success;
 
@@ -95,10 +99,11 @@ static void start_process(void* context_) {
   success = load(file_name, &if_.eip, &if_.esp);
 
   /* If load failed, quit. */
-  if (!success)
+  if (!success) {
     context->load_success = false;
     sema_up(&(context->sema));
     thread_exit();
+  }
 
   /* Push arguments */
   push_args(context->cmd_line, &if_);
@@ -106,9 +111,9 @@ static void start_process(void* context_) {
   /* Set thread_context fields*/
   context->thread_pid = thread_current()->tid;
   context->load_success = true;
-  lock_init(&(context -> lock));
-  context -> ref_cnt = 2;
-  context -> status = -1;
+  lock_init(&(context->lock));
+  context->ref_cnt = 2;
+  context->status = -1;
   thread_current()->self = context;
 
   /* Notify the parent process that loading is done */
@@ -476,43 +481,44 @@ static bool install_page(void* upage, void* kpage, bool writable) {
 }
 
 /* Push the arguments on to stack */
-void push_args(char* cmd_line, struct intr_frame *if_) {
+void push_args(char* cmd_line, struct intr_frame* if_) {
   char *token, *save_ptr;
   char* argv[10];
   int argc = 0;
   /* Parse and push the args(strings) onto stack */
-    for (token = strtok_r (cmd_line, " ", &save_ptr); token != NULL;
-          token = strtok_r (NULL, " ", &save_ptr)) {
-            int length = strlen(token) + 1;
-            if_->esp -= length;
-            memcpy(if_->esp, token, length);
-            argv[argc] = if_->esp;
-            argc ++;
-          };
-    /* Stack-alignment */
-    if_->esp -= ((int)if_->esp + 4 * (1 - argc)) % 16;
+  for (token = strtok_r(cmd_line, " ", &save_ptr); token != NULL;
+       token = strtok_r(NULL, " ", &save_ptr)) {
+    int length = strlen(token) + 1;
+    if_->esp -= length;
+    memcpy(if_->esp, token, length);
+    argv[argc] = if_->esp;
+    argc++;
+  };
+  /* Stack-alignment */
+  int fake_mod = ((int)if_->esp + 4 * (1 - argc)) % 16;
+  if_->esp -= fake_mod < 0 ? fake_mod + 16 : fake_mod;
 
-    /* Push the null sentinel */
+  /* Push the null sentinel */
+  if_->esp -= 4;
+  *(char*)if_->esp = NULL;
+
+  /* Push address of arguments in reverse order */
+  for (int i = argc - 1; i >= 0; i--) {
     if_->esp -= 4;
-    *(char*) if_->esp = NULL;
+    memcpy(if_->esp, &argv[i], 4);
+  }
 
-    /* Push address of arguments in reverse order */
-    for (int i = argc-1; i >= 0; i--) {
-      if_->esp -= 4;
-      memcpy(if_->esp, &argv[i], 4);
-    }
+  /* Push address of argv */
+  if_->esp -= 4;
+  int argv_addr = if_->esp + 4;
+  memcpy(if_->esp, &argv_addr, 4);
 
-    /* Push address of argv */
-    if_->esp -= 4;
-    int argv_addr = if_->esp + 4;
-    memcpy(if_->esp, &argv_addr, 4);
+  /* Push address of argc */
+  if_->esp -= 4;
+  memcpy(if_->esp, &argc, 4);
 
-    /* Push address of argc */
-    if_->esp -= 4;
-    memcpy(if_->esp, &argc, 4);
-
-    /* Push a fake return address */
-    if_->esp -= 4;
-    int fake_eip = NULL;
-    memcpy(if_->esp, &fake_eip, 4);
+  /* Push a fake return address */
+  if_->esp -= 4;
+  int fake_eip = NULL;
+  memcpy(if_->esp, &fake_eip, 4);
 }
