@@ -1,5 +1,6 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
+#include <stdlib.h>
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
@@ -8,18 +9,20 @@
 #include "lib/kernel/console.h"
 
 static void syscall_handler(struct intr_frame*);
-void syscall_create(const char* file, unsigned initial size, struct intr_frame* f);
+void syscall_create(const char* file, unsigned initial_size, struct intr_frame* f);
 void syscall_remove(const char* file, struct intr_frame* f);
 void syscall_open(const char* file, struct intr_frame* f);
 void syscall_filesize(int fd, struct intr_frame* f);
 void syscall_read(int fd, void* buffer, unsigned size, struct intr_frame* f);
 void syscall_write(int fd, const void* buffer, unsigned size, struct intr_frame* f);
-void syscall_seek(int fd, unsigned position);
+void syscall_seek(int fd, unsigned position, struct intr_frame* f);
 void syscall_tell(int fd, struct intr_frame* f);
-void syscall_close(int fd);
-void syscall_exit(struct intr_frame* f);
+void syscall_close(int fd, struct intr_frame* f);
+void syscall_exit(int status, struct intr_frame* f);
 bool valid_fd(int fd_user);
-file* get_f_ptr(int fd);
+struct file* get_f_ptr(int fd);
+struct file_descriptor* get_fd_struct(int fd);
+bool check_addr(const void* ptr, unsigned size);
 
 void syscall_init(void) { intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall"); }
 
@@ -42,38 +45,38 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
   switch (args[0]) {
     case SYS_CREATE:
-      syscall_create(args[1], args[2], &f);
+      syscall_create((const char*)args[1], (unsigned)args[2], f);
       break;
     case SYS_REMOVE:
-      syscall_remove(args[1], &f);
+      syscall_remove((const char*)args[1], f);
       break;
     case SYS_OPEN:
-      syscall_open(args[1], &f);
+      syscall_open((const char*)args[1], f);
       break;
     case SYS_FILESIZE:
-      syscall_filesize(args[1], &f);
+      syscall_filesize((int)args[1], f);
       break;
     case SYS_READ:
-      syscall_read(args[1], args[2], args[3] & f);
+      syscall_read((int)args[1], (void*)args[2], (unsigned)args[3], f);
       break;
     case SYS_WRITE:
-      syscall_write(args[1], args[2], args[3], &f);
+      syscall_write((int)args[1], (const void*)args[2], (unsigned)args[3], f);
       break;
     case SYS_SEEK:
-      syscall_seek(args[1], args[2]);
+      syscall_seek((int)args[1], (unsigned)args[2], f);
       break;
     case SYS_TELL:
-      syscall_tell(args[1], &f);
+      syscall_tell((int)args[1], f);
       break;
     case SYS_CLOSE:
-      syscall_close(args[1]);
+      syscall_close((int)args[1], f);
       break;
     case SYS_EXIT:
-      syscall_exit(&f);
+      syscall_exit((int)args[1], f);
       break;
     default:
       /* PANIC? */
-      syscall_exit(&f); // temporary, need a different strategy (we don't want kill the process)
+      syscall_exit(-1, f); // temporary, need a different strategy (we don't want kill the process)
   }
 }
 
@@ -81,14 +84,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
  * We have move the exit routine in different syscall_exit and incorporate it
  * in our switch statement. In addition to moving it we will modify it as well.
  * On a exit we will implicitly close all the files descriptors as spec requires.
- *
- *
- *
- *
- *
- *
- *
- *
  * /
 
 
@@ -99,11 +94,12 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
  * @f, interrupt frame 
  */
 
-void syscall_create(const char* file, unsigned initial size, struct intr_frame* f) {
-  check_addr(file, size);
-  lock_acquire(*filesys_lock);
-  f->eax = filesys_create(file, size);
-  lock_release(*filesys_lock);
+void syscall_create(const char* file, unsigned initial_size, struct intr_frame* f) {
+  if (!check_addr(file, 0))
+    syscall_exit(-1, f);
+  lock_acquire(&filesys_lock);
+  f->eax = filesys_create(file, initial_size);
+  lock_release(&filesys_lock);
 }
 
 /* HELPER FUNCTION 
@@ -113,9 +109,11 @@ void syscall_create(const char* file, unsigned initial size, struct intr_frame* 
  */
 
 void syscall_remove(const char* file, struct intr_frame* f) {
-  lock_acquire(*filesys_lock);
+  if (!check_addr(file, 0))
+    syscall_exit(-1, f);
+  lock_acquire(&filesys_lock);
   f->eax = filesys_remove(file);
-  lock_release(*filesys_lock);
+  lock_release(&filesys_lock);
 }
 
 /* HELPER FUNCTION 
@@ -125,16 +123,19 @@ void syscall_remove(const char* file, struct intr_frame* f) {
  */
 
 void syscall_open(const char* file, struct intr_frame* f) {
-  lock_acquire(*filesys_lock);
+  if (!check_addr(file, 0))
+    syscall_exit(-1, f);
+  lock_acquire(&filesys_lock);
   struct file_descriptor* file_des = malloc(sizeof(file_descriptor));
   file_des->f_ptr = filesys_open(file);
-  if (f_ptr == NULL) {
-    f->eax = -1 syscall_exit();
+  if (!file_des->f_ptr) {
+    f->eax = -1;
+    syscall_exit(-1, f);
   }
   file_des->fd = thread_current()->next_fd++;
   list_push_back(file_descriptors, &(file_des->elem));
   f->eax = file_des->fd;
-  lock_release(*filesys_lock);
+  lock_release(&filesys_lock);
 }
 
 /* HELPER FUNCTION 
@@ -144,16 +145,16 @@ void syscall_open(const char* file, struct intr_frame* f) {
  */
 
 void syscall_filesize(int fd, struct intr_frame* f) {
-  if (thread_current()->next_fd >= fd || fd < 0) {
-    syscall_exit();
+  if (thread_current()->next_fd <= fd || fd < 0) {
+    syscall_exit(-1, f);
   }
   struct file* f_ptr = get_f_ptr(fd);
   if (!f_ptr) {
-    syscall_exit();
+    syscall_exit(-1, f);
   }
-  lock_acquire(*filesys_lock);
+  lock_acquire(&filesys_lock);
   f->eax = file_length(f_ptr);
-  lock_release(*filesys_lock);
+  lock_release(&filesys_lock);
 }
 
 /* HELPER FUNCTION
@@ -165,15 +166,15 @@ void syscall_filesize(int fd, struct intr_frame* f) {
  *      call exit from different functions would be nice to know what is the exit status.
  *
  */
-void syscall_exit(struct intr_frame* f) {
-  f->eax = args[1];
+void syscall_exit(int status, struct intr_frame* f) {
+  f->eax = status;
   struct list_elem* e;
 
   for (e = list_begin(&file_descriptors); e != list_end(&file_descriptors); e = list_next(e)) {
     struct file_descriptor* fd = list_entry(e, struct file_descriptor, elem);
-    syscall_close(fd->fd);
+    syscall_close(fd->fd, f);
   }
-  printf("%s: exit(%d)\n", &thread_current()->name, args[1]);
+  printf("%s: exit(%d)\n", &thread_current()->name, status);
   thread_exit();
 }
 
@@ -182,19 +183,19 @@ void syscall_exit(struct intr_frame* f) {
  * Check first if the file descriptor is valid
  * @fd, file descriptor
  */
-void syscall_close(int fd) {
-  if (current_thread()->next_fd >= fd || fd < 2) {
-    syscall_exit();
+void syscall_close(int fd, struct intr_frame* f) {
+  if (current_thread()->next_fd <= fd || fd < 2) {
+    syscall_exit(-1, f);
   }
-  lock_acquire(*filesys_lock);
-  file* file_user = get_f_ptr(fd);
+  lock_acquire(&filesys_lock);
+  struct file* file_user = get_f_ptr(fd);
   if (file_user == NULL) {
-    syscall_exit();
+    syscall_exit(-1, f);
   } else {
     file_close(file_user);
-    // need to free the struct
+    free(get_fd_struct(fd));
   }
-  lock_acquire(*filesys_lock);
+  lock_release(&filesys_lock);
 }
 
 /* HELPER FUNCTION
@@ -207,32 +208,33 @@ void syscall_close(int fd) {
  * -------- We need also to check if we don't go out of bounds when we write on a file.
  */
 void syscall_write(int fd, const void* buffer, unsigned size, struct intr_frame* f) {
-  if (thread_current()->next_fd >= fd || fd < 0) {
-    syscall_exit();
+  if (thread_current()->next_fd <= fd || fd < 0 || check_addr(buffer, size)) {
+    syscall_exit(-1, f);
   }
-  check_addr(buffer, size);
-  struct list_elem* e;
   struct file* f_ptr = get_f_ptr(fd);
+  char* b = (char*)buffer;
   if (!f_ptr)
-    syscall_exit();
-  lock_acquire(*filesys_lock);
+    syscall_exit(-1, f);
+  lock_acquire(&filesys_lock);
   if (fd == 1) {
     if (size > 200) {
       int i = 200;
       do {
-        f->eax = putbuf(f_ptr, buffer, i);
+        putbuf(b, i);
+        f->eax += i;
         size -= i;
         if (size < 200) {
           i = size;
         }
-      } while (size > 0)
+      } while (size > 0);
     } else {
-      f->eax = putbuf(f_ptr, buffer, size);
+      putbuf(b, size);
+      f->eax = size;
     }
   } else {
-    f->eax = file_write(f_ptr, buffer, size);
+    f->eax = file_write(f_ptr, b, size);
   }
-  lock_release(*filesys_lock);
+  lock_release(&filesys_lock);
 }
 
 /* HELPER FUNCTION
@@ -246,52 +248,63 @@ void syscall_write(int fd, const void* buffer, unsigned size, struct intr_frame*
  */
 
 void syscall_read(int fd, void* buffer, unsigned size, struct intr_frame* f) {
-  if (thread_current()->next_fd >= fd || fd < 0) {
-    syscall_exit();
+  if (thread_current()->next_fd <= fd || fd < 0 || !check_addr(buffer, size)) {
+    syscall_exit(-1, f);
   }
-  check_addr(buffer, size);
-  struct list_elem* e;
-  struct file* f_ptr;
-  for (e = list_begin(&file_descriptors); e != list_end(&file_descriptors); e = list_next(e)) {
-    struct file_descriptor* file_des = list_entry(e, struct file_descriptor, elem);
-    if (file_des->fd == fd) {
-      f_ptr = file_des->f_ptr;
-      break;
+  lock_acquire(&filesys_lock);
+  struct file* f_ptr = get_f_ptr(fd);
+  if (!f_ptr || fd == 1) {
+    f->eax = -1;
+    syscall_exit(-1, f);
+  }
+  if (fd == 0) {
+    uint8_t c;
+    int i = 0;
+    char* b = (char*)buffer;
+    while (size > 0) {
+      c = input_getc();
+      b[i] = c;
+      if (c == '\r' /* || c == EOF*/) { // need to look this up
+        b[i] = '\n';
+        f->eax = i;
+        break;
+      }
+      size--;
+      i++;
     }
+  } else {
+    f->eax = file_read(f_ptr, buffer, size);
   }
-  lock_acquire(*filesys_lock);
-  f->eax = file_read(f_ptr, buffer, size);
-  lock_release(*filesys_lock);
+  lock_release(&filesys_lock);
 }
 
-void syscall_seek(int fd, unsigned position) {
-  if (thread_current()->next_fd >= fd || fd < 0) {
-    syscall_exit();
+/* HELPER FUNCTION
+ * Handles syscall seek routine
+ * @fd, file descriptor
+ * @position, position in file
+ */
+void syscall_seek(int fd, unsigned position, struct intr_frame* f) {
+  if (thread_current()->next_fd <= fd || fd < 0) {
+    syscall_exit(-1, f);
   }
-  struct list_elem* e;
-  struct file* f_ptr;
-  for (e = list_begin(&file_descriptors); e != list_end(&file_descriptors); e = list_next(e)) {
-    struct file_descriptor* file_des = list_entry(e, struct file_descriptor, elem);
-    if (file_des->fd == fd) {
-      f_ptr = file_des->f_ptr;
-      break;
-    }
-  }
-  lock_acquire(*filesys_lock);
+  lock_acquire(&filesys_lock);
+  struct file* f_ptr = get_f_ptr(fd);
+  if (!f_ptr)
+    syscall_exit(-1, f);
   f->eax = file_seek(f_ptr, position);
-  lock_release(*filesys_lock);
+  lock_release(&filesys_lock);
 }
 
 void syscall_tell(int fd, struct intr_frame* f) {
-  if (thread_current()->next_fd >= fd || fd < 0) {
-    syscall_exit();
+  if (thread_current()->next_fd <= fd || fd < 0) {
+    syscall_exit(-1, f);
   }
+  lock_acquire(&filesys_lock);
   struct file* f_ptr = get_f_ptr(fd);
   if (!f_ptr)
-    syscall_exit();
-  lock_acquire(*filesys_lock);
+    syscall_exit(-1, f);
   f->eax = file_tell(f_ptr);
-  lock_release(*filesys_lock);
+  lock_release(&filesys_lock);
 }
 
 /* HELPER FUNCTION
@@ -315,7 +328,7 @@ bool valid_fd(int fd_user) {
  * @ fd, file descriptor.
  * @return file associated to the given FD.
  */
-file* get_f_ptr(int fd) {
+struct file* get_f_ptr(int fd) {
   struct list_elem* e;
   struct file* f_ptr = NULL;
   for (e = list_begin(&file_descriptors); e != list_end(&file_descriptors); e = list_next(e)) {
@@ -325,4 +338,47 @@ file* get_f_ptr(int fd) {
       return f_ptr;
     }
   }
+}
+
+/* HELPER FUNCTION
+ * Checks the given address if its valid or in user space
+ * @ptr, pointer to check on
+ * @size, size of the ptr
+ * @return true for valid addr and false otherwise
+ */
+bool check_addr(const void* ptr, unsigned size) {
+  if (ptr == NULL) {
+    return false;
+  }
+  bool condition1 = false;
+  bool condition2 = false;
+  if (size > 0) {
+    condition1 = is_user_vaddr(ptr) && is_user_vaddr((ptr + (size - 1)));
+    condition2 = pagedir_get_page(thread_current()->pagedir, ptr) &&
+                 pagedir_get_page(thread_current()->pagedir, (ptr + (size - 1)));
+    return condition1 && condition2;
+  } else {
+    while (1) {
+      if (!check_addr(ptr, 1))
+        return false;
+      if (*((char*)ptr) == '\0')
+        return true;
+      ptr++;
+    }
+  }
+}
+
+/* HELPER FUNCTION
+ * Returns the file descriptor struct given the fd
+ * @fd, a file descriptor
+ */
+struct file_descriptor* get_fd_struct(int fd) {
+  struct list_elem* e;
+  for (e = list_begin(&file_descriptors); e != list_end(&file_descriptors); e = list_next(e)) {
+    struct file_descriptor* file_des = list_entry(e, struct file_descriptor, elem);
+    if (file_des->fd == fd) {
+      return file_des;
+    }
+  }
+  return NULL;
 }
