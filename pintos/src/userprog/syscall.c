@@ -186,12 +186,15 @@ void syscall_close(int fd) {
   if (current_thread()->next_fd >= fd || fd < 2) {
     syscall_exit();
   }
+  lock_acquire(*filesys_lock);
   file* file_user = get_f_ptr(fd);
   if (file_user == NULL) {
     syscall_exit();
   } else {
     file_close(file_user);
+    // need to free the struct
   }
+  lock_acquire(*filesys_lock);
 }
 
 /* HELPER FUNCTION
