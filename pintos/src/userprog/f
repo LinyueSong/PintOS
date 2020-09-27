@@ -135,8 +135,8 @@ void syscall_remove(const char* file, struct intr_frame* f) {
  */
 
 void syscall_open(const char* file, struct intr_frame* f) {
-  printf("they tried to open a file \n\n");
-  if (!check_addr(file, 0))
+    printf("they tried to open a file \n\n");
+    if (!check_addr(file, 0))
     syscall_exit(-1, f);
   lock_acquire(&filesys_lock);
   struct file_descriptor* file_des = malloc(sizeof(struct file_descriptor));
@@ -222,20 +222,17 @@ void syscall_close(int fd, struct intr_frame* f) {
  * -------- We need also to check if we don't go out of bounds when we write on a file.
  */
 void syscall_write(int fd, const void* buffer, unsigned size, struct intr_frame* f) {
-  printf("alohha1 from the read  putbuf fd = %d, size = %d, fd_next = %d, std: %d \n\n", fd, size,
-         thread_current()->next_fd, STDOUT_FILENO);
-  if (!thread_current()->next_fd >= fd || fd < 0 /* || check_addr(buffer, size)*/) {
-    printf("exit here before aloh\n\n");
-    syscall_exit(-1, f);
-  }
+  printf("alohha1 from the read  putbuf fd = %d, size = %d, fd_next = %d \n\n"
+          , fd, size, thread_current()->next_fd);
+  //if (!thread_current()->next_fd >= fd || fd < 0/* || check_addr(buffer, size)*/) {
+   //  syscall_exit(-1, f);
+ // }
   printf("alohha from the read  putbuf fd = %d, size = %d \n\n", fd, size);
-  lock_acquire(&filesys_lock);
-
   struct file* f_ptr = get_f_ptr(fd);
   char* b = (char*)buffer;
   if (!f_ptr)
     syscall_exit(-1, f);
-
+  lock_acquire(&filesys_lock);
   if (fd == 1) {
     if (size > 200) {
       int i = 200;
@@ -252,7 +249,7 @@ void syscall_write(int fd, const void* buffer, unsigned size, struct intr_frame*
       f->eax = size;
     }
   } else {
-    // f->eax = file_write(f_ptr, b, size);
+    f->eax = file_write(f_ptr, b, size);
   }
   lock_release(&filesys_lock);
 }
