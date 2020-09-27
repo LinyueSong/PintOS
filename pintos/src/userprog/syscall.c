@@ -7,6 +7,8 @@
 #include "filesys/file.h"
 #include "filesys/filesys.h"
 #include "lib/kernel/console.h"
+#include "pagedir.h"
+#include "threads/vaddr.h"
 
 static void syscall_handler(struct intr_frame*);
 void syscall_create(const char* file, unsigned initial_size, struct intr_frame* f);
@@ -126,14 +128,14 @@ void syscall_open(const char* file, struct intr_frame* f) {
   if (!check_addr(file, 0))
     syscall_exit(-1, f);
   lock_acquire(&filesys_lock);
-  struct file_descriptor* file_des = malloc(sizeof(file_descriptor));
+  struct file_descriptor* file_des = malloc(sizeof(thread_current()->file_descriptors));
   file_des->f_ptr = filesys_open(file);
   if (!file_des->f_ptr) {
     f->eax = -1;
     syscall_exit(-1, f);
   }
   file_des->fd = thread_current()->next_fd++;
-  list_push_back(file_descriptors, &(file_des->elem));
+  list_push_back(&(thread_current()->file_descriptors), &(file_des->elem));
   f->eax = file_des->fd;
   lock_release(&filesys_lock);
 }
@@ -170,7 +172,8 @@ void syscall_exit(int status, struct intr_frame* f) {
   f->eax = status;
   struct list_elem* e;
 
-  for (e = list_begin(&file_descriptors); e != list_end(&file_descriptors); e = list_next(e)) {
+  for (e = list_begin(&thread_current()->file_descriptors);
+       e != list_end(&thread_current()->file_descriptors); e = list_next(e)) {
     struct file_descriptor* fd = list_entry(e, struct file_descriptor, elem);
     syscall_close(fd->fd, f);
   }
@@ -184,7 +187,7 @@ void syscall_exit(int status, struct intr_frame* f) {
  * @fd, file descriptor
  */
 void syscall_close(int fd, struct intr_frame* f) {
-  if (current_thread()->next_fd <= fd || fd < 2) {
+  if (thread_current()->next_fd <= fd || fd < 2) {
     syscall_exit(-1, f);
   }
   lock_acquire(&filesys_lock);
@@ -291,7 +294,7 @@ void syscall_seek(int fd, unsigned position, struct intr_frame* f) {
   struct file* f_ptr = get_f_ptr(fd);
   if (!f_ptr)
     syscall_exit(-1, f);
-  f->eax = file_seek(f_ptr, position);
+  file_seek(f_ptr, position);
   lock_release(&filesys_lock);
 }
 
@@ -314,7 +317,8 @@ void syscall_tell(int fd, struct intr_frame* f) {
 bool valid_fd(int fd_user) {
   struct list_elem* e;
 
-  for (e = list_begin(&file_descriptors); e != list_end(&file_descriptors); e = list_next(e)) {
+  for (e = list_begin(&thread_current()->file_descriptors);
+       e != list_end(&thread_current()->file_descriptors); e = list_next(e)) {
     struct file_descriptor* f = list_entry(e, struct file_descriptor, elem);
     if (f->fd == fd_user)
       return true;
@@ -331,7 +335,8 @@ bool valid_fd(int fd_user) {
 struct file* get_f_ptr(int fd) {
   struct list_elem* e;
   struct file* f_ptr = NULL;
-  for (e = list_begin(&file_descriptors); e != list_end(&file_descriptors); e = list_next(e)) {
+  for (e = list_begin(&thread_current()->file_descriptors);
+       e != list_end(&thread_current()->file_descriptors); e = list_next(e)) {
     struct file_descriptor* file_des = list_entry(e, struct file_descriptor, elem);
     if (file_des->fd == fd) {
       f_ptr = file_des->f_ptr;
@@ -374,7 +379,8 @@ bool check_addr(const void* ptr, unsigned size) {
  */
 struct file_descriptor* get_fd_struct(int fd) {
   struct list_elem* e;
-  for (e = list_begin(&file_descriptors); e != list_end(&file_descriptors); e = list_next(e)) {
+  for (e = list_begin(&thread_current()->file_descriptors);
+       e != list_end(&thread_current()->file_descriptors); e = list_next(e)) {
     struct file_descriptor* file_des = list_entry(e, struct file_descriptor, elem);
     if (file_des->fd == fd) {
       return file_des;
