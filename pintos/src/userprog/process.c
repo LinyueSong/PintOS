@@ -117,21 +117,11 @@ static void start_process(void* context_) {
   context->status = -1;
   thread_current()->self = context;
 
-  //  thread_current()->next_fd = 3;
+  /* Initialize file descriptor num to 3 */
+  thread_current()->next_fd = 3;
 
   /* Initialize a list of descriptors */
   list_init(&(thread_current()->file_descriptors));
-
-  /* Initialize stdin and stdout */
-  // struct file_descriptor* std_in = malloc(sizeof(struct file_descriptor));
-  // struct file_descriptor* std_out = malloc(sizeof(struct file_descriptor));
-  // std_in->fd = 0;
-  // std_in->f_ptr = STDIN_FILENO;
-  // std_out->fd = 1;
-  // std_out->f_ptr = STDOUT_FILENO;
-  // thread_current()->next_fd = 3;
-  //list_push_back(&(thread_current()->file_descriptors), &(std_in->elem));
-  // list_push_back(&(thread_current()->file_descriptors), &(std_out->elem));
 
   /* Notify the parent process that loading is done */
   sema_up(&(context->sema));
@@ -500,7 +490,7 @@ static bool install_page(void* upage, void* kpage, bool writable) {
 /* Push the arguments on to stack */
 void push_args(char* cmd_line, struct intr_frame* if_) {
   char *token, *save_ptr;
-  char* argv[10];
+  char* argv[50];
   int argc = 0;
   /* Parse and push the args(strings) onto stack */
   for (token = strtok_r(cmd_line, " ", &save_ptr); token != NULL;
