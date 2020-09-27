@@ -83,7 +83,7 @@ static void start_process(void* context_) {
   struct thread_context* context = (struct thread_context*)context_;
 
   /* Get the executable name first */
-  char buff[strlen(context->cmd_line) + 1];
+  char* buff[strlen(context->cmd_line) + 1];
   strlcpy(buff, context->cmd_line, strlen(context->cmd_line) + 1);
   char* save_ptr;
   char* file_name = strtok_r(buff, " ", &save_ptr);
@@ -116,6 +116,20 @@ static void start_process(void* context_) {
   context->ref_cnt = 2;
   context->status = -1;
   thread_current()->self = context;
+
+  /* Initialize a list of descriptors */
+  // list_init(&(thread_current()->file_descriptors));
+
+  /* Initialize stdin and stdout */
+  //struct file_descriptor* std_in = malloc(sizeof(struct file_descriptor));
+  // struct file_descriptor* std_out = malloc(sizeof(struct file_descriptor));
+  // std_in->fd = 0;
+  // std_in->f_ptr = STDIN_FILENO;
+  // std_out->fd = 1;
+  // std_out->f_ptr = STDOUT_FILENO;
+  // thread_current()->next_fd = 3;
+  //list_push_back(&(thread_current()->file_descriptors), &(std_in->elem));
+  //list_push_back(&(thread_current()->file_descriptors), &(std_out->elem));
 
   /* Notify the parent process that loading is done */
   sema_up(&(context->sema));
