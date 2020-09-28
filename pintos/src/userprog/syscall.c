@@ -140,11 +140,18 @@ void syscall_remove(const char* file, struct intr_frame* f) {
 
 void syscall_open(const char* file, struct intr_frame* f) {
   lock_acquire(&filesys_lock);
-  if (*file == "" || !check_addr(file, -1)) {
-    syscall_exit(-1, f);
-  }
+  // if (*file == "" || !check_addr(file, -1)) {
+  //   syscall_exit(-1, f);
+  // }
+
   struct file_descriptor* file_des = malloc(sizeof(struct file_descriptor));
   file_des->f_ptr = filesys_open(file);
+  if (file_des->f_ptr == NULL) {
+    f->eax = -1;
+    free(file_des);
+    lock_release(&filesys_lock);
+    return;
+  }
   file_des->fd = thread_current()->next_fd++;
   list_push_back(&(thread_current()->file_descriptors), &(file_des->elem));
   f->eax = file_des->fd;
