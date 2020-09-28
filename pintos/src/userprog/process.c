@@ -83,10 +83,11 @@ static void start_process(void* context_) {
   struct thread_context* context = (struct thread_context*)context_;
 
   /* Get the executable name first */
-  char buff[strlen(context->cmd_line) + 1];
+  char* buff[strlen(context->cmd_line) + 1];
   strlcpy(buff, context->cmd_line, strlen(context->cmd_line) + 1);
   char* save_ptr;
   char* file_name = strtok_r(buff, " ", &save_ptr);
+  list_init(&(thread_current()->file_descriptors));
 
   struct intr_frame if_;
   bool success;
@@ -115,6 +116,9 @@ static void start_process(void* context_) {
   context->ref_cnt = 2;
   context->status = -1;
   thread_current()->self = context;
+
+  /* Initialize file descriptor num to 3 */
+  thread_current()->next_fd = 2;
 
   /* Notify the parent process that loading is done */
   sema_up(&(context->sema));
@@ -483,7 +487,7 @@ static bool install_page(void* upage, void* kpage, bool writable) {
 /* Push the arguments on to stack */
 void push_args(char* cmd_line, struct intr_frame* if_) {
   char *token, *save_ptr;
-  char* argv[10];
+  char* argv[50];
   int argc = 0;
   /* Parse and push the args(strings) onto stack */
   for (token = strtok_r(cmd_line, " ", &save_ptr); token != NULL;

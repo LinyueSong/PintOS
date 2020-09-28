@@ -7,6 +7,28 @@
 #include "threads/synch.h"
 #include "threads/fixed-point.h"
 
+/* Thread identifier type.
+   You can redefine this to whatever type you like. */
+typedef int tid_t;
+
+struct thread_context {
+  char* cmd_line;        /* Filename + args */
+  tid_t thread_pid;      /* Thread id / proceess id of the thread */
+  struct semaphore sema; /* The semaphore used to wait for child thread finish loading */
+  struct lock lock;      /* Lock for ref_cnt */
+  int ref_cnt; /* An indicator for how many threads still hold a reference to this struct. Initialized to 2*/
+  bool load_success; /* Boolean indicates whether the child process loaded sucessfully */
+  int status;        /* Child process exit code. Initialized to -1 */
+  struct list_elem elem;
+};
+
+/* File descriptor struct. Contains all the information needed to represent a file descriptor. */
+struct file_descriptor {
+  struct list_elem elem;
+  int fd;
+  struct file* f_ptr;
+};
+
 /* States in a thread's life cycle. */
 enum thread_status {
   THREAD_RUNNING, /* Running thread. */
@@ -98,6 +120,9 @@ struct thread {
 
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
+
+  struct list file_descriptors;
+  int next_fd;
 
 #ifdef USERPROG
   /* Owned by userprog/process.c. */
