@@ -60,7 +60,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
     case SYS_OPEN:
       // printf("entered sys_open user\n\n");
-      syscall_open((const char*)args[1], f);
+      syscall_open(args[1], f);
       break;
     case SYS_FILESIZE:
       // printf("entered sys_filesize\n\n");
@@ -140,14 +140,13 @@ void syscall_remove(const char* file, struct intr_frame* f) {
 
 void syscall_open(const char* file, struct intr_frame* f) {
   lock_acquire(&filesys_lock);
-  struct file_descriptor* file_des = malloc(sizeof(struct file_descriptor));
-  file_des->f_ptr = filesys_open(file);
-  if (!file_des->f_ptr) {
-    f->eax = -1;
+  if (*file == "" || !check_addr(file, -1)) {
     syscall_exit(-1, f);
   }
+  struct file_descriptor* file_des = malloc(sizeof(struct file_descriptor));
+  file_des->f_ptr = filesys_open(file);
   file_des->fd = thread_current()->next_fd++;
-  list_insert(&(thread_current()->file_descriptors), &(file_des->elem));
+  list_push_back(&(thread_current()->file_descriptors), &(file_des->elem));
   f->eax = file_des->fd;
   lock_release(&filesys_lock);
 }

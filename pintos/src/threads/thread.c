@@ -404,7 +404,11 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   list_push_back(&all_list, &t->allelem);
   intr_set_level(old_level);
 
+  /* Initialize a children list of the process */
   list_init(&t->children);
+
+  /* Initialize a list of descriptors */
+  list_init(&t->file_descriptors);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and

@@ -120,9 +120,6 @@ static void start_process(void* context_) {
   /* Initialize file descriptor num to 3 */
   thread_current()->next_fd = 2;
 
-  /* Initialize a list of descriptors */
-  list_init(&(thread_current()->file_descriptors));
-
   /* Notify the parent process that loading is done */
   sema_up(&(context->sema));
 
