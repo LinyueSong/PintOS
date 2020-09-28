@@ -22,6 +22,13 @@ struct thread_context {
   struct list_elem elem;
 };
 
+/* File descriptor struct. Contains all the information needed to represent a file descriptor. */
+struct file_descriptor {
+  struct list_elem elem;
+  int fd;
+  struct file* f_ptr;
+};
+
 /* States in a thread's life cycle. */
 enum thread_status {
   THREAD_RUNNING, /* Running thread. */
@@ -106,6 +113,9 @@ struct thread {
 
   /* Shared between thread.c and synch.c. */
   struct list_elem elem; /* List element. */
+
+  struct list file_descriptors;
+  int next_fd;
 
 #ifdef USERPROG
   /* Owned by userprog/process.c. */

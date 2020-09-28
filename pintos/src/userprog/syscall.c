@@ -30,6 +30,7 @@ void syscall_init(void) { intr_register_int(0x30, 3, INTR_ON, syscall_handler, "
 
 static void syscall_handler(struct intr_frame* f UNUSED) {
   uint32_t* args = ((uint32_t*)f->esp);
+  lock_init(&filesys_lock);
 
   /*
    * The following print statement, if uncommented, will print out the syscall
@@ -44,6 +45,9 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
    * before calling a syscall helper we must make sure that the arguments passed
    * to us are valid.
    */
+  if (!check_addr(args, 5)) {
+    syscall_exit(-1, f);
+  }
 
   switch (args[0]) {
     case SYS_CREATE:
@@ -135,10 +139,7 @@ void syscall_remove(const char* file, struct intr_frame* f) {
  */
 
 void syscall_open(const char* file, struct intr_frame* f) {
-  //  printf("they tried to open a file \n\n");
-  // if (!check_addr(file, 0))
-  //     syscall_exit(-1, f);
-  //lock_acquire(&filesys_lock);
+  lock_acquire(&filesys_lock);
   struct file_descriptor* file_des = malloc(sizeof(struct file_descriptor));
   file_des->f_ptr = filesys_open(file);
   if (!file_des->f_ptr) {
@@ -148,7 +149,7 @@ void syscall_open(const char* file, struct intr_frame* f) {
   file_des->fd = thread_current()->next_fd++;
   list_insert(&(thread_current()->file_descriptors), &(file_des->elem));
   f->eax = file_des->fd;
-  // lock_release(&filesys_lock);
+  lock_release(&filesys_lock);
 }
 
 /* HELPER FUNCTION 
@@ -180,9 +181,9 @@ void syscall_filesize(int fd, struct intr_frame* f) {
  *
  */
 void syscall_exit(int status, struct intr_frame* f) {
-  if (check_addr(f->esp, 0))
-    ;
   f->eax = status;
+  //printf("hello from exit, status: %d\n\n\n", status);
+
   struct list_elem* e;
 
   for (e = list_begin(&thread_current()->file_descriptors);
@@ -224,11 +225,8 @@ void syscall_close(int fd, struct intr_frame* f) {
  * -------- We need also to check if we don't go out of bounds when we write on a file.
  */
 void syscall_write(int fd, const void* buffer, unsigned size, struct intr_frame* f) {
-  // printf("alohha1 from the read  putbuf fd = %d, size = %d, fd_next = %d, std: %d \n\n"
-  //         , fd, size, thread_current()->next_fd, STDOUT_FILENO);
-  //lock_acquire(&filesys_lock);
   if (!check_addr(buffer, size)) {
-    syscall_exit(-1, &f);
+    syscall_exit(-1, f);
   }
   char* b = buffer;
   if (fd == 1) {
@@ -239,7 +237,7 @@ void syscall_write(int fd, const void* buffer, unsigned size, struct intr_frame*
     struct file* f_ptr = get_f_ptr(fd);
     if (f_ptr == NULL) {
       f->eax = -1;
-      syscall_exit(-1, &f);
+      syscall_exit(-1, f);
     }
     f->eax = file_write(f_ptr, buffer, size);
   }
@@ -256,7 +254,7 @@ void syscall_write(int fd, const void* buffer, unsigned size, struct intr_frame*
  */
 
 void syscall_read(int fd, void* buffer, unsigned size, struct intr_frame* f) {
-  if (thread_current()->next_fd <= fd || fd < 0 || !check_addr(buffer, size)) {
+  if (thread_current()->next_fd <= fd || fd < 0) {
     syscall_exit(-1, f);
   }
   //lock_acquire(&filesys_lock);
@@ -360,13 +358,13 @@ bool check_addr(const void* ptr, unsigned size) {
   if (ptr == NULL) {
     return false;
   }
-  bool condition1 = false;
-  bool condition2 = false;
   if (size > 0) {
-    condition1 = is_user_vaddr(ptr) && is_user_vaddr((ptr + (size - 1)));
-    condition2 = pagedir_get_page(thread_current()->pagedir, ptr) &&
-                 pagedir_get_page(thread_current()->pagedir, (ptr + (size - 1)));
-    return condition1 && condition2;
+    if (!is_user_vaddr(ptr) || pagedir_get_page(thread_current()->pagedir, ptr) == NULL ||
+        !is_user_vaddr(ptr + (size - 1)) ||
+        pagedir_get_page(thread_current()->pagedir, ptr + (size - 1)) == NULL) {
+      return false;
+    }
+    return true;
   } else {
     while (1) {
       if (!check_addr(ptr, 1))

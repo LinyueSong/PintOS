@@ -118,7 +118,7 @@ static void start_process(void* context_) {
   thread_current()->self = context;
 
   /* Initialize file descriptor num to 3 */
-  thread_current()->next_fd = 3;
+  thread_current()->next_fd = 2;
 
   /* Initialize a list of descriptors */
   list_init(&(thread_current()->file_descriptors));
