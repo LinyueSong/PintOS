@@ -104,7 +104,7 @@ static void start_process(void* context_) {
     context->load_success = false;
     context->status = -1;
     thread_current()->self = context;
-    sema_up(&(context->sema));
+    // sema_up(&(context->sema));
     thread_exit();
   }
 
