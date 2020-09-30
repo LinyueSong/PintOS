@@ -203,13 +203,14 @@ void syscall_exit(int status, struct intr_frame* f) {
   thread_current()->self->status = status;
   //printf("hello from exit, status: %d\n\n\n", status);
 
-  struct list_elem* e;
+  /* We need to free the structs somehow */
+  // struct list_elem* e;
 
-  for (e = list_begin(&thread_current()->file_descriptors);
-       e != list_end(&thread_current()->file_descriptors); e = list_next(e)) {
-    struct file_descriptor* fd = list_entry(e, struct file_descriptor, elem);
-    file_close(fd->f_ptr);
-  }
+  // for (e = list_begin(&thread_current()->file_descriptors);
+  //      e != list_end(&thread_current()->file_descriptors); e = list_next(e)) {
+  //   struct file_descriptor* fd = list_entry(e, struct file_descriptor, elem);
+  //   file_close(fd->f_ptr);
+  // }
   thread_exit();
 }
 
