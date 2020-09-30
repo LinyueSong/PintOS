@@ -237,7 +237,9 @@ void syscall_exit(int status, struct intr_frame* f) {
   // for (e = list_begin(&thread_current()->file_descriptors);
   //      e != list_end(&thread_current()->file_descriptors); e = list_next(e)) {
   //   struct file_descriptor* fd = list_entry(e, struct file_descriptor, elem);
+  //   list_remove(&(fd->elem));
   //   file_close(fd->f_ptr);
+  //   free(fd);
   // }
   thread_exit();
 }
@@ -252,12 +254,13 @@ void syscall_close(int fd, struct intr_frame* f) {
     syscall_exit(-1, f);
   }
   lock_acquire(&filesys_lock);
-  struct file* file_user = get_f_ptr(fd);
-  if (file_user == NULL) {
+  struct file_descriptor* file_descriptor_struct = get_fd_struct(fd);
+  if (file_descriptor_struct == NULL) {
     syscall_exit(-1, f);
   } else {
-    file_close(file_user);
-    free(get_fd_struct(fd));
+    file_close(file_descriptor_struct->f_ptr);
+    list_remove(&(file_descriptor_struct->elem));
+    free(file_descriptor_struct);
   }
   lock_release(&filesys_lock);
 }
@@ -401,6 +404,7 @@ struct file* get_f_ptr(int fd) {
       return f_ptr;
     }
   }
+  return NULL;
 }
 
 /* HELPER FUNCTION
