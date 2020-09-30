@@ -51,43 +51,65 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
   switch (args[0]) {
     case SYS_CREATE:
-      // printf("entered user sys_create\n\n");
+      if (!check_addr(args + 4, 8)) {
+        syscall_exit(-1, f);
+      }
       syscall_create((const char*)args[1], (unsigned)args[2], f);
       break;
     case SYS_REMOVE:
-      // printf("entered user sys_remove\n\n");
+      if (!check_addr(args + 4, 4)) {
+        syscall_exit(-1, f);
+      }
       syscall_remove((const char*)args[1], f);
       break;
     case SYS_OPEN:
-      // printf("entered sys_open user\n\n");
+      if (!check_addr(args + 4, 4)) {
+        syscall_exit(-1, f);
+      }
       syscall_open(args[1], f);
       break;
     case SYS_FILESIZE:
-      // printf("entered sys_filesize\n\n");
+      if (!check_addr(args + 4, 4)) {
+        syscall_exit(-1, f);
+      }
       syscall_filesize((int)args[1], f);
       break;
     case SYS_READ:
-      // printf("entered sys_read\n\n");
+      if (!check_addr(args + 4, 12)) {
+        syscall_exit(-1, f);
+      }
       syscall_read((int)args[1], (void*)args[2], (unsigned)args[3], f);
       break;
     case SYS_WRITE:
-      // printf("entered sys_write args[1] = %d \n\n", args[1]);
+      if (!check_addr(args + 4, 12)) {
+        syscall_exit(-1, f);
+      }
       syscall_write((int)args[1], (const void*)args[2], (unsigned)args[3], f);
       break;
     case SYS_SEEK:
-      // printf("entered sys_seek\n\n");
+      if (!check_addr(args + 4, 8)) {
+        syscall_exit(-1, f);
+      }
       syscall_seek((int)args[1], (unsigned)args[2], f);
       break;
     case SYS_TELL:
-      // printf("entered sys_tell\n\n");
+      if (!check_addr(args + 4, 4)) {
+        syscall_exit(-1, f);
+      }
       syscall_tell((int)args[1], f);
       break;
     case SYS_CLOSE:
-      // printf("entered sys_close\n\n");
+      if (!check_addr(args + 4, 4)) {
+        syscall_exit(-1, f);
+      }
       syscall_close((int)args[1], f);
       break;
     case SYS_EXIT:
-      //printf("entered sys_exit\n\n");
+      if (!check_addr(args + 4, 4)) {
+        f->eax = -1;
+        thread_current()->self->status = -1;
+        thread_exit();
+      }
       syscall_exit((int)args[1], f);
       break;
     case SYS_EXEC:
@@ -97,10 +119,16 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       syscall_exec(((const char*)args[1]), f);
       break;
     case SYS_WAIT:
-      if (!check_addr(args + 4, 8)) {
+      if (!check_addr(args + 4, 4)) {
         syscall_exit(-1, f);
       }
       syscall_wait((tid_t)args[1], f);
+      break;
+    case SYS_PRACTICE:
+      if (!check_addr(args + 4, 4)) {
+        syscall_exit(-1, f);
+      }
+      f->eax = args[1] + 1;
       break;
     default:
       /* PANIC? */
@@ -125,9 +153,9 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 void syscall_create(const char* file, unsigned initial_size, struct intr_frame* f) {
   if (!check_addr(file, 0))
     syscall_exit(-1, f);
-  //lock_acquire(&filesys_lock);
+  lock_acquire(&filesys_lock);
   f->eax = filesys_create(file, initial_size);
-  //lock_release(&filesys_lock);
+  lock_release(&filesys_lock);
 }
 
 /* HELPER FUNCTION 
@@ -139,9 +167,9 @@ void syscall_create(const char* file, unsigned initial_size, struct intr_frame* 
 void syscall_remove(const char* file, struct intr_frame* f) {
   if (!check_addr(file, 0))
     syscall_exit(-1, f);
-  //lock_acquire(&filesys_lock);
+  lock_acquire(&filesys_lock);
   f->eax = filesys_remove(file);
-  //lock_release(&filesys_lock);
+  lock_release(&filesys_lock);
 }
 
 /* HELPER FUNCTION 
@@ -152,9 +180,9 @@ void syscall_remove(const char* file, struct intr_frame* f) {
 
 void syscall_open(const char* file, struct intr_frame* f) {
   lock_acquire(&filesys_lock);
-  // if (*file == "" || !check_addr(file, -1)) {
-  //   syscall_exit(-1, f);
-  // }
+  if (!check_addr(file, -1)) {
+    syscall_exit(-1, f);
+  }
 
   struct file_descriptor* file_des = malloc(sizeof(struct file_descriptor));
   file_des->f_ptr = filesys_open(file);
@@ -184,9 +212,9 @@ void syscall_filesize(int fd, struct intr_frame* f) {
   if (!f_ptr) {
     syscall_exit(-1, f);
   }
-  // lock_acquire(&filesys_lock);
+  lock_acquire(&filesys_lock);
   f->eax = file_length(f_ptr);
-  // lock_release(&filesys_lock);
+  lock_release(&filesys_lock);
 }
 
 /* HELPER FUNCTION
@@ -199,6 +227,7 @@ void syscall_filesize(int fd, struct intr_frame* f) {
  *
  */
 void syscall_exit(int status, struct intr_frame* f) {
+
   f->eax = status;
   thread_current()->self->status = status;
   //printf("hello from exit, status: %d\n\n\n", status);
@@ -223,7 +252,7 @@ void syscall_close(int fd, struct intr_frame* f) {
   if (thread_current()->next_fd <= fd || fd < 2) {
     syscall_exit(-1, f);
   }
-  // lock_acquire(&filesys_lock);
+  lock_acquire(&filesys_lock);
   struct file* file_user = get_f_ptr(fd);
   if (file_user == NULL) {
     syscall_exit(-1, f);
@@ -231,7 +260,7 @@ void syscall_close(int fd, struct intr_frame* f) {
     file_close(file_user);
     free(get_fd_struct(fd));
   }
-  // lock_release(&filesys_lock);
+  lock_release(&filesys_lock);
 }
 
 /* HELPER FUNCTION
@@ -276,7 +305,7 @@ void syscall_read(int fd, void* buffer, unsigned size, struct intr_frame* f) {
   if (thread_current()->next_fd <= fd || fd < 0) {
     syscall_exit(-1, f);
   }
-  //lock_acquire(&filesys_lock);
+  lock_acquire(&filesys_lock);
   struct file* f_ptr = get_f_ptr(fd);
   if (!f_ptr || fd == 1) {
     f->eax = -1;
@@ -300,7 +329,7 @@ void syscall_read(int fd, void* buffer, unsigned size, struct intr_frame* f) {
   } else {
     f->eax = file_read(f_ptr, buffer, size);
   }
-  //lock_release(&filesys_lock);
+  lock_release(&filesys_lock);
 }
 
 /* HELPER FUNCTION
@@ -312,24 +341,24 @@ void syscall_seek(int fd, unsigned position, struct intr_frame* f) {
   if (thread_current()->next_fd <= fd || fd < 0) {
     syscall_exit(-1, f);
   }
-  //lock_acquire(&filesys_lock);
+  lock_acquire(&filesys_lock);
   struct file* f_ptr = get_f_ptr(fd);
   if (!f_ptr)
     syscall_exit(-1, f);
   file_seek(f_ptr, position);
-  //lock_release(&filesys_lock);
+  lock_release(&filesys_lock);
 }
 
 void syscall_tell(int fd, struct intr_frame* f) {
   if (thread_current()->next_fd <= fd || fd < 0) {
     syscall_exit(-1, f);
   }
-  //lock_acquire(&filesys_lock);
+  lock_acquire(&filesys_lock);
   struct file* f_ptr = get_f_ptr(fd);
   if (!f_ptr)
     syscall_exit(-1, f);
   f->eax = file_tell(f_ptr);
-  //lock_release(&filesys_lock);
+  lock_release(&filesys_lock);
 }
 
 /* HELPER FUNCTION
