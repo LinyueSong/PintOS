@@ -195,7 +195,7 @@ void syscall_exit(int status, struct intr_frame* f) {
   for (e = list_begin(&thread_current()->file_descriptors);
        e != list_end(&thread_current()->file_descriptors); e = list_next(e)) {
     struct file_descriptor* fd = list_entry(e, struct file_descriptor, elem);
-    syscall_close(fd->fd, f);
+    file_close(fd->f_ptr);
   }
   printf("%s: exit(%d)\n", &thread_current()->name, status);
   thread_exit();

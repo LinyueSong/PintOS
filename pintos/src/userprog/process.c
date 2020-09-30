@@ -83,7 +83,7 @@ static void start_process(void* context_) {
   struct thread_context* context = (struct thread_context*)context_;
 
   /* Get the executable name first */
-  char* buff[strlen(context->cmd_line) + 1];
+  char buff[strlen(context->cmd_line) + 1];
   strlcpy(buff, context->cmd_line, strlen(context->cmd_line) + 1);
   char* save_ptr;
   char* file_name = strtok_r(buff, " ", &save_ptr);
