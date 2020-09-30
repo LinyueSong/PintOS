@@ -179,11 +179,10 @@ void syscall_remove(const char* file, struct intr_frame* f) {
  */
 
 void syscall_open(const char* file, struct intr_frame* f) {
-  lock_acquire(&filesys_lock);
   if (!check_addr(file, -1)) {
     syscall_exit(-1, f);
   }
-
+  lock_acquire(&filesys_lock);
   struct file_descriptor* file_des = malloc(sizeof(struct file_descriptor));
   file_des->f_ptr = filesys_open(file);
   if (file_des->f_ptr == NULL) {
@@ -276,18 +275,22 @@ void syscall_write(int fd, const void* buffer, unsigned size, struct intr_frame*
   if (!check_addr(buffer, size)) {
     syscall_exit(-1, f);
   }
+  lock_acquire(&filesys_lock);
   char* b = buffer;
   if (fd == 1) {
     putbuf(buffer, size);
     f->eax = size;
+    lock_release(&filesys_lock);
     return;
   } else {
     struct file* f_ptr = get_f_ptr(fd);
     if (f_ptr == NULL) {
       f->eax = -1;
+      lock_release(&filesys_lock);
       syscall_exit(-1, f);
     }
     f->eax = file_write(f_ptr, buffer, size);
+    lock_release(&filesys_lock);
   }
 }
 
@@ -305,10 +308,14 @@ void syscall_read(int fd, void* buffer, unsigned size, struct intr_frame* f) {
   if (thread_current()->next_fd <= fd || fd < 0) {
     syscall_exit(-1, f);
   }
+  if (!check_addr(buffer, size)) {
+    syscall_exit(-1, f);
+  }
   lock_acquire(&filesys_lock);
   struct file* f_ptr = get_f_ptr(fd);
   if (!f_ptr || fd == 1) {
     f->eax = -1;
+    lock_release(&filesys_lock);
     syscall_exit(-1, f);
   }
   if (fd == 0) {
