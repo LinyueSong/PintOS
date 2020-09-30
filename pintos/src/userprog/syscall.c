@@ -24,7 +24,7 @@ void syscall_exit(int status, struct intr_frame* f);
 bool valid_fd(int fd_user);
 struct file* get_f_ptr(int fd);
 struct file_descriptor* get_fd_struct(int fd);
-bool check_addr(const void* ptr, unsigned size);
+bool check_addr(const void* ptr, int size);
 
 void syscall_init(void) { intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall"); }
 
@@ -413,7 +413,7 @@ struct file* get_f_ptr(int fd) {
  * @size, size of the ptr
  * @return true for valid addr and false otherwise
  */
-bool check_addr(const void* ptr, unsigned size) {
+bool check_addr(const void* ptr, int size) {
   if (ptr == NULL) {
     return false;
   }

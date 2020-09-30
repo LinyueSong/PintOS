@@ -65,10 +65,10 @@ tid_t process_execute(const char* cmd_line) {
   } else {
     /* Wait for the loading of child process executable done. */
     sema_down(&(context->sema));
-
     if (!context->load_success) {
       /* Load failed. */
       palloc_free_page(fn_copy);
+      free(context);
       tid = TID_ERROR;
     } else {
       /* Load succeeded */
@@ -102,6 +102,8 @@ static void start_process(void* context_) {
   /* If load failed, quit. */
   if (!success) {
     context->load_success = false;
+    context->status = -1;
+    thread_current()->self = context;
     sema_up(&(context->sema));
     thread_exit();
   }
