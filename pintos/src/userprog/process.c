@@ -88,7 +88,6 @@ static void start_process(void* context_) {
   strlcpy(buff, context->cmd_line, strlen(context->cmd_line) + 1);
   char* save_ptr;
   char* file_name = strtok_r(buff, " ", &save_ptr);
-  list_init(&(thread_current()->file_descriptors));
 
   struct intr_frame if_;
   bool success;
