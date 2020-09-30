@@ -20,7 +20,6 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 
-static struct semaphore temporary;
 static thread_func start_process NO_RETURN;
 static bool load(const char* cmdline, void (**eip)(void), void** esp);
 void push_args(char* cmd_line, struct intr_frame* if_);
@@ -32,7 +31,6 @@ void push_args(char* cmd_line, struct intr_frame* if_);
 tid_t process_execute(const char* cmd_line) {
   char* fn_copy;
   tid_t tid;
-  sema_init(&temporary, 0);
 
   /* Allocate memory for a thread context struct */
   struct thread_context* context = (struct thread_context*)malloc(sizeof(struct thread_context));
@@ -51,8 +49,11 @@ tid_t process_execute(const char* cmd_line) {
   sema_init(&(context->sema), 0);
 
   /*  Get the thread name for thread_create */
-  char *token, *save_ptr;
-  char* file_name = strtok_r(cmd_line, " ", &save_ptr);
+  char* save_ptr;
+
+  char cmd_line_cpy[strlen(cmd_line) + 1];
+  strlcpy(cmd_line_cpy, cmd_line, strlen(cmd_line) + 1);
+  char* file_name = strtok_r(cmd_line_cpy, " ", &save_ptr);
 
   /* Create a new thread to execute FILE_NAME. */
   tid = thread_create(file_name, PRI_DEFAULT, start_process, context);
@@ -142,9 +143,21 @@ static void start_process(void* context_) {
 
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
-int process_wait(tid_t child_tid UNUSED) {
-  sema_down(&temporary);
-  return 0;
+int process_wait(tid_t child_tid) {
+  struct list children = thread_current()->children;
+  struct list_elem* e;
+  struct thread_context* context;
+  for (e = list_begin(&children); e != list_end(&children); e = list_next(e)) {
+    context = list_entry(e, struct thread_context, elem);
+    if (context->thread_pid == child_tid) {
+      sema_down(&context->sema);
+      list_remove(e);
+      int status = context->status;
+      free(context);
+      return status;
+    }
+  }
+  return -1;
 }
 
 /* Free the current process's resources. */
@@ -167,7 +180,8 @@ void process_exit(void) {
     pagedir_activate(NULL);
     pagedir_destroy(pd);
   }
-  sema_up(&temporary);
+  printf("%s: exit(%d)\n", &cur->name, cur->self->status);
+  sema_up(&cur->self->sema);
 }
 
 /* Sets up the CPU for running user code in the current

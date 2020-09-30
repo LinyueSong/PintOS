@@ -45,7 +45,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
    * before calling a syscall helper we must make sure that the arguments passed
    * to us are valid.
    */
-  if (!check_addr(args, 5)) {
+  if (!check_addr(args, 4)) {
     syscall_exit(-1, f);
   }
 
@@ -89,6 +89,18 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
     case SYS_EXIT:
       //printf("entered sys_exit\n\n");
       syscall_exit((int)args[1], f);
+      break;
+    case SYS_EXEC:
+      if (!check_addr(args + 4, 4)) {
+        syscall_exit(-1, f);
+      }
+      syscall_exec(((const char*)args[1]), f);
+      break;
+    case SYS_WAIT:
+      if (!check_addr(args + 4, 8)) {
+        syscall_exit(-1, f);
+      }
+      syscall_wait((tid_t)args[1], f);
       break;
     default:
       /* PANIC? */
@@ -188,6 +200,7 @@ void syscall_filesize(int fd, struct intr_frame* f) {
  */
 void syscall_exit(int status, struct intr_frame* f) {
   f->eax = status;
+  thread_current()->self->status = status;
   //printf("hello from exit, status: %d\n\n\n", status);
 
   struct list_elem* e;
@@ -197,7 +210,6 @@ void syscall_exit(int status, struct intr_frame* f) {
     struct file_descriptor* fd = list_entry(e, struct file_descriptor, elem);
     file_close(fd->f_ptr);
   }
-  printf("%s: exit(%d)\n", &thread_current()->name, status);
   thread_exit();
 }
 
@@ -372,12 +384,13 @@ bool check_addr(const void* ptr, unsigned size) {
     }
     return true;
   } else {
+    char* ptr_cpy = (char*)ptr;
     while (1) {
-      if (!check_addr(ptr, 1))
+      if (!check_addr(ptr_cpy, 1))
         return false;
-      if (*((char*)ptr) == '\0')
+      if (*ptr_cpy == '\0')
         return true;
-      ptr++;
+      ptr_cpy++;
     }
   }
 }
@@ -397,3 +410,11 @@ struct file_descriptor* get_fd_struct(int fd) {
   }
   return NULL;
 }
+
+void syscall_exec(const char* cmd, struct intr_frame* f) {
+  if (!check_addr(cmd, -1))
+    syscall_exit(-1, f);
+  f->eax = process_execute(cmd);
+}
+
+void syscall_wait(tid_t pid, struct intr_frame* f) { f->eax = process_wait(pid); }
