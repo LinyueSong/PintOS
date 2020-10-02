@@ -9,6 +9,7 @@
 #include "lib/kernel/console.h"
 #include "pagedir.h"
 #include "threads/vaddr.h"
+#include "devices/shutdown.h"
 
 static void syscall_handler(struct intr_frame*);
 void syscall_create(const char* file, unsigned initial_size, struct intr_frame* f);
@@ -130,6 +131,8 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       }
       f->eax = args[1] + 1;
       break;
+    case SYS_HALT:
+      shutdown_power_off();
     default:
       /* PANIC? */
       syscall_exit(-1, f); // temporary, need a different strategy (we don't want kill the process)

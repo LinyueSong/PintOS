@@ -145,15 +145,16 @@ static void start_process(void* context_) {
    This function will be implemented in problem 2-2.  For now, it
    does nothing. */
 int process_wait(tid_t child_tid) {
-  struct list children = thread_current()->children;
+  struct list* children = &thread_current()->children;
   struct list_elem* e;
   struct thread_context* context;
-  for (e = list_begin(&children); e != list_end(&children); e = list_next(e)) {
+  for (e = list_begin(children); e != list_end(children); e = list_next(e)) {
     context = list_entry(e, struct thread_context, elem);
     if (context->thread_pid == child_tid) {
       sema_down(&context->sema);
       list_remove(e);
       int status = context->status;
+      palloc_free_page(context->cmd_line);
       free(context);
       return status;
     }
