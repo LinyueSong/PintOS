@@ -190,16 +190,15 @@ void syscall_open(const char* file, struct intr_frame* f) {
   lock_acquire(&filesys_lock);
   struct file_descriptor* file_des = malloc(sizeof(struct file_descriptor));
   file_des->f_ptr = filesys_open(file);
+  lock_release(&filesys_lock);
   if (file_des->f_ptr == NULL) {
     f->eax = -1;
     free(file_des);
-    lock_release(&filesys_lock);
     return;
   }
   file_des->fd = thread_current()->next_fd++;
   list_push_back(&(thread_current()->file_descriptors), &(file_des->elem));
   f->eax = file_des->fd;
-  lock_release(&filesys_lock);
 }
 
 /* HELPER FUNCTION 
@@ -234,18 +233,6 @@ void syscall_exit(int status, struct intr_frame* f) {
 
   f->eax = status;
   thread_current()->self->status = status;
-  //printf("hello from exit, status: %d\n\n\n", status);
-
-  /* We need to free the structs somehow */
-  // struct list_elem* e;
-
-  // for (e = list_begin(&thread_current()->file_descriptors);
-  //      e != list_end(&thread_current()->file_descriptors); e = list_next(e)) {
-  //   struct file_descriptor* fd = list_entry(e, struct file_descriptor, elem);
-  //   list_remove(&(fd->elem));
-  //   file_close(fd->f_ptr);
-  //   free(fd);
-  // }
   thread_exit();
 }
 
@@ -258,16 +245,16 @@ void syscall_close(int fd, struct intr_frame* f) {
   if (thread_current()->next_fd <= fd || fd < 2) {
     syscall_exit(-1, f);
   }
-  lock_acquire(&filesys_lock);
   struct file_descriptor* file_descriptor_struct = get_fd_struct(fd);
   if (file_descriptor_struct == NULL) {
     syscall_exit(-1, f);
   } else {
+    lock_acquire(&filesys_lock);
     file_close(file_descriptor_struct->f_ptr);
+    lock_release(&filesys_lock);
     list_remove(&(file_descriptor_struct->elem));
     free(file_descriptor_struct);
   }
-  lock_release(&filesys_lock);
 }
 
 /* HELPER FUNCTION
@@ -356,10 +343,10 @@ void syscall_seek(int fd, unsigned position, struct intr_frame* f) {
   if (thread_current()->next_fd <= fd || fd < 0) {
     syscall_exit(-1, f);
   }
-  lock_acquire(&filesys_lock);
   struct file* f_ptr = get_f_ptr(fd);
   if (!f_ptr)
     syscall_exit(-1, f);
+  lock_acquire(&filesys_lock);
   file_seek(f_ptr, position);
   lock_release(&filesys_lock);
 }
@@ -368,10 +355,9 @@ void syscall_tell(int fd, struct intr_frame* f) {
   if (thread_current()->next_fd <= fd || fd < 0) {
     syscall_exit(-1, f);
   }
-  lock_acquire(&filesys_lock);
   struct file* f_ptr = get_f_ptr(fd);
-  if (!f_ptr)
-    syscall_exit(-1, f);
+  if (!f_ptr) syscall_exit(-1, f);
+  lock_acquire(&filesys_lock);
   f->eax = file_tell(f_ptr);
   lock_release(&filesys_lock);
 }

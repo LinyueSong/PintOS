@@ -19,6 +19,7 @@
 #include "threads/synch.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "syscall.h"
 
 static thread_func start_process NO_RETURN;
 static bool load(const char* cmdline, void (**eip)(void), void** esp);
@@ -182,11 +183,53 @@ void process_exit(void) {
     pagedir_destroy(pd);
   }
   printf("%s: exit(%d)\n", &cur->name, cur->self->status);
+
+  /* Close executable */
   struct file* executable = cur->self->executable;
   if (executable) {
     file_allow_write(executable);
     file_close(executable);
   }
+  if (!cur->self->load_success) {
+    sema_up(&cur->self->sema);
+    return;
+  }
+
+  /* Free self context if possible */
+  lock_acquire(&cur->self->lock);
+  cur->self->ref_cnt--;
+  if (cur->self->ref_cnt == 0) {
+    palloc_free_page(cur->self->cmd_line);
+    free(cur->self);
+  } else {
+    lock_release(&cur->self->lock);
+  }
+
+  /* Free children context if possible */
+  struct list_elem* e;
+  for (e = list_begin(&thread_current()->children); e != list_end(&thread_current()->children); e = list_next(e)) {
+    struct thread_context* context = list_entry(e, struct thread_context, elem);
+    lock_acquire(&context->lock);
+    context->ref_cnt--;
+    if (context->ref_cnt == 0) {
+      list_remove(e);
+      palloc_free_page(context->cmd_line);
+      free(context);
+    } else {
+      lock_release(&context->lock);
+    }
+  }
+
+  /* Free file descriptors */
+  for (e = list_begin(&thread_current()->file_descriptors);
+       e != list_end(&thread_current()->file_descriptors); e = list_next(e)) {
+    struct file_descriptor* f = list_entry(e, struct file_descriptor, elem);
+    lock_acquire(&filesys_lock);
+    file_close(f->f_ptr);
+    lock_release(&filesys_lock);
+    list_remove(&f->elem);
+    free(f);
+       }
   sema_up(&cur->self->sema);
 }
 
