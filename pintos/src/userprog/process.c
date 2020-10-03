@@ -221,15 +221,14 @@ void process_exit(void) {
   }
 
   /* Free file descriptors */
-  for (e = list_begin(&thread_current()->file_descriptors);
-       e != list_end(&thread_current()->file_descriptors); e = list_next(e)) {
+  while (!list_empty(&cur->file_descriptors)) {
+    e = list_pop_front(&cur->file_descriptors);
     struct file_descriptor* f = list_entry(e, struct file_descriptor, elem);
     lock_acquire(&filesys_lock);
     file_close(f->f_ptr);
     lock_release(&filesys_lock);
-    list_remove(&f->elem);
     free(f);
-       }
+  }
   sema_up(&cur->self->sema);
 }
 
