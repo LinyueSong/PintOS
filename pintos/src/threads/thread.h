@@ -20,6 +20,7 @@ struct thread_context {
   bool load_success; /* Boolean indicates whether the child process loaded sucessfully */
   int status;        /* Child process exit code. Initialized to -1 */
   struct list_elem elem;
+  struct file* executable;
 };
 
 /* File descriptor struct. Contains all the information needed to represent a file descriptor. */

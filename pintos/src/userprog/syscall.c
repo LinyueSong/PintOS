@@ -27,11 +27,13 @@ struct file* get_f_ptr(int fd);
 struct file_descriptor* get_fd_struct(int fd);
 bool check_addr(const void* ptr, int size);
 
-void syscall_init(void) { intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall"); }
+void syscall_init(void) {
+  intr_register_int(0x30, 3, INTR_ON, syscall_handler, "syscall");
+  lock_init(&filesys_lock);
+}
 
 static void syscall_handler(struct intr_frame* f UNUSED) {
   uint32_t* args = ((uint32_t*)f->esp);
-  lock_init(&filesys_lock);
 
   /*
    * The following print statement, if uncommented, will print out the syscall

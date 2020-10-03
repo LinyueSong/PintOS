@@ -82,6 +82,7 @@ tid_t process_execute(const char* cmd_line) {
    running. */
 static void start_process(void* context_) {
   struct thread_context* context = (struct thread_context*)context_;
+  thread_current()->self = context;
 
   /* Get the executable name first */
   char buff[strlen(context->cmd_line) + 1];
@@ -103,7 +104,6 @@ static void start_process(void* context_) {
   if (!success) {
     context->load_success = false;
     context->status = -1;
-    thread_current()->self = context;
     // sema_up(&(context->sema));
     thread_exit();
   }
@@ -117,7 +117,6 @@ static void start_process(void* context_) {
   lock_init(&(context->lock));
   context->ref_cnt = 2;
   context->status = -1;
-  thread_current()->self = context;
 
   /* Initialize file descriptor num to 3 */
   thread_current()->next_fd = 2;
@@ -183,6 +182,11 @@ void process_exit(void) {
     pagedir_destroy(pd);
   }
   printf("%s: exit(%d)\n", &cur->name, cur->self->status);
+  struct file* executable = cur->self->executable;
+  if (executable) {
+    file_allow_write(executable);
+    file_close(executable);
+  }
   sema_up(&cur->self->sema);
 }
 
@@ -286,10 +290,13 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
 
   /* Open executable file. */
   file = filesys_open(file_name);
+  t->self->executable = file;
+
   if (file == NULL) {
     printf("load: %s: open failed\n", file_name);
     goto done;
   }
+  file_deny_write(file);
 
   /* Read and verify executable header. */
   if (file_read(file, &ehdr, sizeof ehdr) != sizeof ehdr ||
@@ -360,7 +367,6 @@ bool load(const char* file_name, void (**eip)(void), void** esp) {
 
 done:
   /* We arrive here whether the load is successful or not. */
-  file_close(file);
   return success;
 }
 
