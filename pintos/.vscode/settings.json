@@ -1,8 +1,0 @@
-{
-    "files.associations": {
-        "__config": "c",
-        "atomic": "c",
-        "cstdlib": "c",
-        "locale": "c"
-    }
-}
