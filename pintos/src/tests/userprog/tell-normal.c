@@ -10,4 +10,9 @@ void test_main(void) {
   seek(handle, 5);
   int position = tell(handle);
   if (position != 5) fail("tell() returned %d", position);
+  close(handle);
+  handle = open("sample.txt");
+  if (handle < 2) fail("open() returned %d", handle);
+  position = tell(handle);
+  if (position != 0) fail("tell() returned %d", position);
 }

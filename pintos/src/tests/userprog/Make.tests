@@ -4,7 +4,7 @@ tests/%.output: FILESYSSOURCE = --filesys-size=2
 tests/%.output: PUTFILES = $(filter-out kernel.bin loader.bin, $^)
 
 
-tests/userprog_TESTS = $(addprefix tests/userprog/, seek-normal tell-normal do-nothing           \
+tests/userprog_TESTS = $(addprefix tests/userprog/, seek-normal tell-normal do-nothing open-bad-str          \
 stack-align-0 args-none args-single args-multiple args-many             \
 args-dbl-space sc-bad-sp sc-bad-arg sc-boundary sc-boundary-2           \
 sc-boundary-3 halt exit create-normal create-empty create-null          \
@@ -23,8 +23,9 @@ stack-align-2 stack-align-3 stack-align-4)
 tests/userprog_PROGS = $(tests/userprog_TESTS) $(addprefix \
 tests/userprog/,child-simple child-args child-bad child-close child-rox)
 
+tests/userprog/open-bad-str_SRC = tests/userprog/open-bad-str.c tests/main.c tests/userprog/boundary.c
 tests/userprog/tell-normal_SRC = tests/userprog/tell-normal.c tests/main.c
-tests/userprog/seek-normal_SRC = tests/userprog/seek-normal.c tests/main.c
+tests/userprog/seek-normal_SRC = tests/userprog/seek-normal.c tests/main.c 
 tests/userprog/iloveos_SRC = tests/userprog/iloveos.c tests/main.c
 tests/userprog/practice_SRC = tests/userprog/practice.c tests/main.c
 tests/userprog/do-nothing_SRC = tests/userprog/do-nothing.c
@@ -130,6 +131,7 @@ tests/userprog/args-many_ARGS = a b c d e f g h i j k l m n o p q r s t u v
 tests/userprog/args-dbl-space_ARGS = two  spaces!
 tests/userprog/multi-recurse_ARGS = 15
 
+tests/userprog/open-bad-str_PUTFILES += tests/userprog/sample.txt
 tests/userprog/tell-normal_PUTFILES += tests/userprog/sample.txt
 tests/userprog/seek-normal_PUTFILES += tests/userprog/sample.txt
 tests/userprog/open-normal_PUTFILES += tests/userprog/sample.txt

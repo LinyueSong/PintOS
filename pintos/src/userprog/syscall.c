@@ -176,6 +176,10 @@ void syscall_open(const char* file, struct intr_frame* f) {
     syscall_exit(-1, f);
   }
   struct file_descriptor* file_des = malloc(sizeof(struct file_descriptor));
+  if (file_des == NULL) {
+    f->eax = -1;
+    return;
+  }
   lock_acquire(&filesys_lock);
   file_des->f_ptr = filesys_open(file);
   lock_release(&filesys_lock);
