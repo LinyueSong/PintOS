@@ -44,14 +44,12 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 
   /* printf("System call number: %d\n", args[0]); */
 
-  /* VIRGIL:
-   * before calling a syscall helper we must make sure that the arguments passed
+  /* Before calling a syscall helper we must make sure that the arguments passed
    * to us are valid.
    */
   if (!check_addr(args, 4)) {
     syscall_exit(-1, f);
   }
-
   switch (args[0]) {
     case SYS_CREATE:
       if (!check_addr(args + 4, 8)) {
@@ -137,16 +135,9 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       shutdown_power_off();
     default:
       /* PANIC? */
-      syscall_exit(-1, f); // temporary, need a different strategy (we don't want kill the process)
+      syscall_exit(-1, f); 
   }
 }
-
-/* design doc changes
- * We have move the exit routine in different syscall_exit and incorporate it
- * in our switch statement. In addition to moving it we will modify it as well.
- * On a exit we will implicitly close all the files descriptors as spec requires.
- * /
-
 
 /* HELPER FUNCTION 
  * that handles the create routine. Creates a file of some size.
@@ -154,7 +145,6 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
  * @size, size of the file
  * @f, interrupt frame 
  */
-
 void syscall_create(const char* file, unsigned initial_size, struct intr_frame* f) {
   if (!check_addr(file, 0))
     syscall_exit(-1, f);
@@ -168,7 +158,6 @@ void syscall_create(const char* file, unsigned initial_size, struct intr_frame* 
  * @file, name of the file
  * @f, interrupt frame 
  */
-
 void syscall_remove(const char* file, struct intr_frame* f) {
   if (!check_addr(file, 0))
     syscall_exit(-1, f);
@@ -182,13 +171,12 @@ void syscall_remove(const char* file, struct intr_frame* f) {
  * @file, name of the file
  * @f, interrupt frame 
  */
-
 void syscall_open(const char* file, struct intr_frame* f) {
   if (!check_addr(file, -1)) {
     syscall_exit(-1, f);
   }
-  lock_acquire(&filesys_lock);
   struct file_descriptor* file_des = malloc(sizeof(struct file_descriptor));
+  lock_acquire(&filesys_lock);
   file_des->f_ptr = filesys_open(file);
   lock_release(&filesys_lock);
   if (file_des->f_ptr == NULL) {
@@ -206,7 +194,6 @@ void syscall_open(const char* file, struct intr_frame* f) {
  * @fd, file descriptor
  * @f, interrupt frame 
  */
-
 void syscall_filesize(int fd, struct intr_frame* f) {
   if (thread_current()->next_fd <= fd || fd < 0) {
     syscall_exit(-1, f);
@@ -221,16 +208,11 @@ void syscall_filesize(int fd, struct intr_frame* f) {
 }
 
 /* HELPER FUNCTION
- * Handles the exit routine. Implicitly closes all its open file descriptors.
+ * Handles the exit routine. 
+ * @status, the exit status
  * @f, an interrupt frame
- *
- *------What about 0 and 1 should we close it or pintos close them implicitly
- *------When we exit how do we know, print status. Why we need that? If we
- *      call exit from different functions would be nice to know what is the exit status.
- *
  */
 void syscall_exit(int status, struct intr_frame* f) {
-
   f->eax = status;
   thread_current()->self->status = status;
   thread_exit();
@@ -238,7 +220,7 @@ void syscall_exit(int status, struct intr_frame* f) {
 
 /* HELPER FUNCTION
  * Handles the close routine.
- * Check first if the file descriptor is valid
+ * Validate the passed in arguments first. Then close the file if it's open.
  * @fd, file descriptor
  */
 void syscall_close(int fd, struct intr_frame* f) {
@@ -263,8 +245,6 @@ void syscall_close(int fd, struct intr_frame* f) {
  * @ buffer, buffer to write to
  * @ size, size 
  * @ f, interrupt frame
- *
- * -------- We need also to check if we don't go out of bounds when we write on a file.
  */
 void syscall_write(int fd, const void* buffer, unsigned size, struct intr_frame* f) {
   if (!check_addr(buffer, size)) {
@@ -272,14 +252,14 @@ void syscall_write(int fd, const void* buffer, unsigned size, struct intr_frame*
   }
   lock_acquire(&filesys_lock);
   char* b = buffer;
-  if (fd == 1) {
+  if (fd == 1) {                  /* Stdout case */
     putbuf(buffer, size);
     f->eax = size;
     lock_release(&filesys_lock);
     return;
-  } else {
+  } else {         
     struct file* f_ptr = get_f_ptr(fd);
-    if (f_ptr == NULL) {
+    if (f_ptr == NULL) {          /* File is not openned */
       f->eax = -1;
       lock_release(&filesys_lock);
       syscall_exit(-1, f);
@@ -290,15 +270,12 @@ void syscall_write(int fd, const void* buffer, unsigned size, struct intr_frame*
 }
 
 /* HELPER FUNCTION
+ * Handles the read function.
  * @ fd, file descriptor
  * @ buffer, buffer to write to
  * @ size, size
  * @ f, interrupt frame
- *
- *
- * 
  */
-
 void syscall_read(int fd, void* buffer, unsigned size, struct intr_frame* f) {
   if (thread_current()->next_fd <= fd || fd < 0) {
     syscall_exit(-1, f);
@@ -308,19 +285,19 @@ void syscall_read(int fd, void* buffer, unsigned size, struct intr_frame* f) {
   }
   lock_acquire(&filesys_lock);
   struct file* f_ptr = get_f_ptr(fd);
-  if (!f_ptr || fd == 1) {
+  if (!f_ptr || fd == 1) {        
     f->eax = -1;
     lock_release(&filesys_lock);
     syscall_exit(-1, f);
   }
-  if (fd == 0) {
+  if (fd == 0) {                  /* Stdin case */
     uint8_t c;
     int i = 0;
     char* b = (char*)buffer;
     while (size > 0) {
       c = input_getc();
       b[i] = c;
-      if (c == '\r' /* || c == EOF*/) { // need to look this up
+      if (c == '\r') { 
         b[i] = '\n';
         f->eax = i;
         break;
@@ -351,6 +328,10 @@ void syscall_seek(int fd, unsigned position, struct intr_frame* f) {
   lock_release(&filesys_lock);
 }
 
+/* HELPER FUNCTION
+ * Handles syscall tell routine
+ * @fd, file descriptor
+ */
 void syscall_tell(int fd, struct intr_frame* f) {
   if (thread_current()->next_fd <= fd || fd < 0) {
     syscall_exit(-1, f);
@@ -368,7 +349,6 @@ void syscall_tell(int fd, struct intr_frame* f) {
  */
 bool valid_fd(int fd_user) {
   struct list_elem* e;
-
   for (e = list_begin(&thread_current()->file_descriptors);
        e != list_end(&thread_current()->file_descriptors); e = list_next(e)) {
     struct file_descriptor* f = list_entry(e, struct file_descriptor, elem);
@@ -428,7 +408,7 @@ bool check_addr(const void* ptr, int size) {
 }
 
 /* HELPER FUNCTION
- * Returns the file descriptor struct given the fd
+ * Returns the file descriptor struct pointer given the fd.
  * @fd, a file descriptor
  */
 struct file_descriptor* get_fd_struct(int fd) {
@@ -443,10 +423,18 @@ struct file_descriptor* get_fd_struct(int fd) {
   return NULL;
 }
 
+/* HELPER FUNCTION
+ * Handle the exec syscall routine.
+ * @cmd, executable name + arguments
+ */
 void syscall_exec(const char* cmd, struct intr_frame* f) {
   if (!check_addr(cmd, -1))
     syscall_exit(-1, f);
   f->eax = process_execute(cmd);
 }
 
+/* HELPER FUNCTION
+ * Handle the wait syscall routine.
+ * @pid, child's process id to wait for.
+ */
 void syscall_wait(tid_t pid, struct intr_frame* f) { f->eax = process_wait(pid); }

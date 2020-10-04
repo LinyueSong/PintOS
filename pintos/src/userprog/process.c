@@ -140,26 +140,31 @@ static void start_process(void* context_) {
    exception), returns -1.  If TID is invalid or if it was not a
    child of the calling process, or if process_wait() has already
    been successfully called for the given TID, returns -1
-   immediately, without waiting.
-
-   This function will be implemented in problem 2-2.  For now, it
-   does nothing. */
+   immediately, without waiting. */
 int process_wait(tid_t child_tid) {
   struct list* children = &thread_current()->children;
   struct list_elem* e;
   struct thread_context* context;
+  struct list_elem* child_elem;
+
+  /* Find the child thread, wait for it to finish */ 
   for (e = list_begin(children); e != list_end(children); e = list_next(e)) {
     context = list_entry(e, struct thread_context, elem);
     if (context->thread_pid == child_tid) {
+      child_elem = e;
       sema_down(&context->sema);
-      list_remove(e);
-      int status = context->status;
-      palloc_free_page(context->cmd_line);
-      free(context);
-      return status;
     }
   }
-  return -1;
+  if (child_elem == NULL) {
+    return -1;
+  }
+  /* Free the child's thread_context struct */
+  context = list_entry(child_elem, struct thread_context, elem);
+  list_remove(child_elem);
+  int status = context->status;
+  palloc_free_page(context->cmd_line);
+  free(context);
+  return status;
 }
 
 /* Free the current process's resources. */
@@ -207,7 +212,9 @@ void process_exit(void) {
 
   /* Free children context if possible */
   struct list_elem* e;
-  for (e = list_begin(&thread_current()->children); e != list_end(&thread_current()->children); e = list_next(e)) {
+  struct list_elem e_copy;
+  for (e = list_begin(&thread_current()->children); e != list_end(&thread_current()->children); e = list_next(&e_copy)) {
+    e_copy = *e;
     struct thread_context* context = list_entry(e, struct thread_context, elem);
     lock_acquire(&context->lock);
     context->ref_cnt--;
