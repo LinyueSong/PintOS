@@ -103,10 +103,11 @@ void sema_up(struct semaphore* sema) {
 
   old_level = intr_disable();
   if (!list_empty(&sema->waiters)) {
+    /* Unblock the thread with the max priority. Remove it from the waiter list. */
     struct list_elem *thread_elem = list_max(&sema->waiters, comparator_priority, NULL);
-    struct thread* next_thread = list_entry(thread_elem, struct thread, elem);
+    struct thread* max_thread = list_entry(thread_elem, struct thread, elem);
     list_remove(thread_elem);
-    thread_unblock(next_thread);
+    thread_unblock(max_thread);
   }
   sema->value++;
   intr_set_level(old_level);
