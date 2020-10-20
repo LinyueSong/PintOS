@@ -73,6 +73,10 @@ int64_t timer_ticks(void) {
   return t;
 }
 
+/* Returns the number of timer ticks elapsed since THEN, which
+   should be a value once returned by timer_ticks(). */
+int64_t timer_elapsed(int64_t then) { return timer_ticks() - then; }
+
 /* Comparator passed to the list_insert_ordered such that we have the 
 threads with smaller wakeup_time closer to the front of the list */
 bool comparator_wakeup_time(const struct list_elem *x, const struct list_elem *y, void *aux) {
@@ -80,10 +84,6 @@ bool comparator_wakeup_time(const struct list_elem *x, const struct list_elem *y
   struct thread* thready = list_entry(y, struct thread, elem);
   return threadx->wakeup_time < thready->wakeup_time;
 }
-
-/* Returns the number of timer ticks elapsed since THEN, which
-   should be a value once returned by timer_ticks(). */
-int64_t timer_elapsed(int64_t then) { return timer_ticks() - then; }
 
 /* Sleeps for approximately TICKS timer ticks.  Interrupts must
    be turned on. */
@@ -93,7 +93,7 @@ void timer_sleep(int64_t ticks) {
   ASSERT(intr_get_level() == INTR_ON);
 
   /* Disable interrupts */
-  intr_disable();
+  enum intr_level old_level = intr_disable();
 
   /* Get the current thread and save the wakeup_time. */
   struct thread* cur_thread = thread_current();
@@ -106,7 +106,7 @@ void timer_sleep(int64_t ticks) {
   thread_block();
 
   /* Enable interrupts */
-  intr_enable();
+  intr_set_level(old_level);
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -161,12 +161,12 @@ static void timer_interrupt(struct intr_frame* args UNUSED) {
     struct thread* thread_to_check = list_entry(thread_elem, struct thread, elem);
 
     /* If the thread's wakeup_time has arrived, pop the thread from the wait list and unblock it. */
-    if (thread_to_check->wakeup_time < ticks) {
+    if (thread_to_check->wakeup_time <= ticks) {
       list_pop_front(&wait_list);
       thread_unblock(thread_to_check);
       /* Yield if the current thread's priority is lower than the woken up thread */
       if (thread_current()->priority < thread_to_check->priority) {
-        intr_yield_on_return;
+        intr_yield_on_return();
       }
     } else {
       break;

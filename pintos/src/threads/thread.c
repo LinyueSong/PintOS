@@ -189,6 +189,10 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   /* Add to run queue. */
   thread_unblock(t);
 
+  /* Yield if the new thread has a higher priority */
+  if (thread_current()->priority < priority) {
+    thread_yield();
+  }
   return tid;
 }
 
@@ -416,6 +420,12 @@ static void* alloc_frame(struct thread* t, size_t size) {
   return t->stack;
 }
 
+/* A comparator used to find the thread with the max priority on the ready list */
+bool comparator_priority(struct list_elem *x, struct list_elem *y, void *aux) {
+  struct thread* threadx = list_entry(x, struct thread, elem);
+  struct thread* thready = list_entry(y, struct thread, elem);
+  return threadx->priority < thready->priority;
+}
 /* Chooses and returns the next thread to be scheduled.  Should
    return a thread from the run queue, unless the run queue is
    empty.  (If the running thread can continue running, then it
@@ -424,8 +434,13 @@ static void* alloc_frame(struct thread* t, size_t size) {
 static struct thread* next_thread_to_run(void) {
   if (list_empty(&ready_list))
     return idle_thread;
-  else
-    return list_entry(list_pop_front(&ready_list), struct thread, elem);
+  else {
+    /* Get the next thread with the highest priority. */
+    struct list_elem *thread_elem = list_max(&ready_list, comparator_priority, NULL);
+    struct thread* next_thread = list_entry(thread_elem, struct thread, elem);
+    list_remove(thread_elem);
+    return next_thread;
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page
