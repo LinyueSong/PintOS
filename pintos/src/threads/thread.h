@@ -137,5 +137,5 @@ int thread_get_nice(void);
 void thread_set_nice(int);
 int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
-
+bool comparator_priority(struct list_elem *x, struct list_elem *y, void *aux);
 #endif /* threads/thread.h */
