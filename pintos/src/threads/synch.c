@@ -110,6 +110,7 @@ void sema_up(struct semaphore* sema) {
     thread_unblock(max_thread);
   }
   sema->value++;
+  thread_yield();
   intr_set_level(old_level);
 }
 
