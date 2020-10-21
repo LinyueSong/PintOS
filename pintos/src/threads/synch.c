@@ -301,6 +301,14 @@ void cond_wait(struct condition* cond, struct lock* lock) {
   sema_down(&waiter.semaphore);
   lock_acquire(lock);
 }
+/* Comparator used by cond_signal to compare the effective priorities of two waiters on a condition variable */
+bool comparator_cv(struct list_elem *x, struct list_elem *y) {
+  struct list *list_x = &list_entry(x, struct semaphore_elem, elem)->semaphore.waiters;
+  struct list *list_y = &list_entry(y, struct semaphore_elem, elem)->semaphore.waiters;
+  struct thread *thread_x = list_entry(list_begin(list_x), struct thread, elem);
+  struct thread *thread_y = list_entry(list_begin(list_y), struct thread, elem);
+  return thread_x->priority < thread_y->priority;
+}
 
 /* If any threads are waiting on COND (protected by LOCK), then
    this function signals one of them to wake up from its wait.
@@ -315,8 +323,12 @@ void cond_signal(struct condition* cond, struct lock* lock UNUSED) {
   ASSERT(!intr_context());
   ASSERT(lock_held_by_current_thread(lock));
 
-  if (!list_empty(&cond->waiters))
-    sema_up(&list_entry(list_pop_front(&cond->waiters), struct semaphore_elem, elem)->semaphore);
+  /* Wakeup the waiter with max priority using comparator_cv. */
+  if (!list_empty(&cond->waiters)) {
+    struct list_elem *max_elem = list_max(&cond->waiters, comparator_cv, NULL);
+    list_remove(max_elem);
+    sema_up(&list_entry(max_elem, struct semaphore_elem, elem)->semaphore);
+  }
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
