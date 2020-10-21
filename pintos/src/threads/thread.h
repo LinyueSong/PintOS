@@ -90,9 +90,12 @@ struct thread {
   int priority;              /* Priority. */
   struct list_elem allelem;  /* List element for all threads list. */
   int64_t wakeup_time;           /* the time when the thread has to wakeup. Add to the `thread_struct` */
+  int base_priority;         /* The base priority of the thread.
   /* Shared between thread.c and synch.c. */
-  struct list_elem elem; /* List element. */
-
+  struct list_elem elem;     /* List element. */
+  struct list locks_held;    /* All the locks held by the current thread */
+  struct thread *waitee;      /* The thread that holds the lock the thread is waiting for */
+  
 #ifdef USERPROG
   /* Owned by userprog/process.c. */
   uint32_t* pagedir; /* Page directory. */
@@ -138,4 +141,5 @@ void thread_set_nice(int);
 int thread_get_recent_cpu(void);
 int thread_get_load_avg(void);
 bool comparator_priority(struct list_elem *x, struct list_elem *y, void *aux);
+void update_effective_priority();
 #endif /* threads/thread.h */

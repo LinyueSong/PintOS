@@ -1,5 +1,6 @@
 #include "list.h"
 #include "../debug.h"
+#include "../../threads/thread.h"
 
 /* Our doubly linked lists have two header elements: the "head"
    just before the first element and the "tail" just after the
@@ -69,6 +70,9 @@ struct list_elem* list_begin(struct list* list) {
    last element in its list, returns the list tail.  Results are
    undefined if ELEM is itself a list tail. */
 struct list_elem* list_next(struct list_elem* elem) {
+  if (!is_head(elem) && !is_interior(elem)) {
+    barrier();
+  }
   ASSERT(is_head(elem) || is_interior(elem));
   return elem->next;
 }

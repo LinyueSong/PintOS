@@ -301,8 +301,37 @@ void thread_foreach(thread_action_func* func, void* aux) {
   }
 }
 
-/* Sets the current thread's priority to NEW_PRIORITY. */
-void thread_set_priority(int new_priority) { thread_current()->priority = new_priority; }
+/* Update the effective priority. */
+void update_effective_priority() {
+  enum intr_level old_level = intr_disable();
+  struct thread* cur_thread = thread_current();
+  int old_priority = cur_thread->priority;
+  cur_thread->priority = cur_thread->base_priority;
+  struct list_elem *l;
+  struct list_elem *w;
+
+  /* Iterate through all our waiters. */
+  for (l = list_begin(&cur_thread->locks_held); l != list_end(&cur_thread->locks_held); l = list_next(l)) {
+    struct list *waiters = &list_entry(l, struct lock, elem)->semaphore.waiters;
+    for (w = list_begin(waiters); w != list_end(waiters); w = list_next(w)) {
+      int waiter_priority = list_entry(w, struct thread, elem)->priority;
+      if (waiter_priority > cur_thread->priority) {
+        cur_thread->priority = waiter_priority;
+      }
+    }
+  }
+  /* Yield if the effective priority decreases. */
+  if (old_priority > cur_thread->priority) {
+    thread_yield();
+  }
+  intr_set_level(old_level);
+}
+
+/* Sets the current thread's priority to NEW_PRIORITY. Update the effective priority */
+void thread_set_priority(int new_priority) { 
+  thread_current()->base_priority = new_priority; 
+  update_effective_priority();
+}
 
 /* Returns the current thread's priority. */
 int thread_get_priority(void) { return thread_current()->priority; }
@@ -401,11 +430,14 @@ static void init_thread(struct thread* t, const char* name, int priority) {
   t->status = THREAD_BLOCKED;
   strlcpy(t->name, name, sizeof t->name);
   t->stack = (uint8_t*)t + PGSIZE;
-  t->priority = priority;
   t->magic = THREAD_MAGIC;
 
   old_level = intr_disable();
   list_push_back(&all_list, &t->allelem);
+  list_init(&t->locks_held);
+  t->base_priority = priority;
+  t->priority = priority;
+  t->waitee = NULL;
   intr_set_level(old_level);
 }
 
