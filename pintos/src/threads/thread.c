@@ -161,7 +161,6 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   tid_t tid;
 
   ASSERT(function != NULL);
-
   /* Allocate thread. */
   t = palloc_get_page(PAL_ZERO);
   if (t == NULL)
@@ -305,7 +304,6 @@ void thread_foreach(thread_action_func* func, void* aux) {
 void update_effective_priority() {
   enum intr_level old_level = intr_disable();
   struct thread* cur_thread = thread_current();
-  int old_priority = cur_thread->priority;
   cur_thread->priority = cur_thread->base_priority;
   struct list_elem *l;
   struct list_elem *w;
@@ -320,17 +318,17 @@ void update_effective_priority() {
       }
     }
   }
-  /* Yield if the effective priority decreases. */
-  if (old_priority > cur_thread->priority) {
-    thread_yield();
-  }
   intr_set_level(old_level);
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. Update the effective priority */
 void thread_set_priority(int new_priority) { 
+  int old_priority  = thread_current()->priority;
   thread_current()->base_priority = new_priority; 
   update_effective_priority();
+  if (old_priority > thread_current()->priority) {
+    thread_yield();
+  }
 }
 
 /* Returns the current thread's priority. */

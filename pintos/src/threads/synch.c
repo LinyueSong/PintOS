@@ -100,8 +100,7 @@ void sema_up(struct semaphore* sema) {
   enum intr_level old_level;
 
   ASSERT(sema != NULL);
-
-  old_level = intr_disable();
+  int max_priority = -999;
   if (!list_empty(&sema->waiters)) {
     /* Unblock the thread with the max priority. Remove it from the waiter list. */
     struct list_elem *thread_elem = list_max(&sema->waiters, comparator_priority, NULL);
@@ -110,7 +109,14 @@ void sema_up(struct semaphore* sema) {
     thread_unblock(max_thread);
   }
   sema->value++;
-  thread_yield();
+
+  /* Yield if necessaary */
+  if (intr_context()) {
+      intr_yield_on_return();
+  } else {
+      thread_yield();
+  }
+  
   intr_set_level(old_level);
 }
 
@@ -238,8 +244,8 @@ void lock_release(struct lock* lock) {
   enum intr_level old_level = intr_disable();
   list_remove(&lock->elem);
   lock->holder = NULL;
-  sema_up(&lock->semaphore);
   update_effective_priority();
+  sema_up(&lock->semaphore);
   intr_set_level(old_level);
 }
 
