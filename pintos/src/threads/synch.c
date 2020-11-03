@@ -100,7 +100,6 @@ void sema_up(struct semaphore* sema) {
   enum intr_level old_level;
 
   ASSERT(sema != NULL);
-  int max_priority = -999;
   if (!list_empty(&sema->waiters)) {
     /* Unblock the thread with the max priority. Remove it from the waiter list. */
     struct list_elem *thread_elem = list_max(&sema->waiters, comparator_priority, NULL);
@@ -109,7 +108,7 @@ void sema_up(struct semaphore* sema) {
     thread_unblock(max_thread);
   }
   sema->value++;
-
+  
   /* Yield if necessaary */
   if (intr_context()) {
       intr_yield_on_return();
@@ -139,6 +138,7 @@ void sema_self_test(void) {
   }
   printf("done.\n");
 }
+
 
 /* Thread function used by sema_self_test(). */
 static void sema_test_helper(void* sema_) {
