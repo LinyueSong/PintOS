@@ -147,7 +147,7 @@ int process_wait(tid_t child_tid) {
   struct thread_context* context;
   struct list_elem* child_elem;
 
-  /* Find the child thread, wait for it to finish */ 
+  /* Find the child thread, wait for it to finish */
   for (e = list_begin(children); e != list_end(children); e = list_next(e)) {
     context = list_entry(e, struct thread_context, elem);
     if (context->thread_pid == child_tid) {
@@ -213,7 +213,8 @@ void process_exit(void) {
   /* Free children context if possible */
   struct list_elem* e;
   struct list_elem e_copy;
-  for (e = list_begin(&thread_current()->children); e != list_end(&thread_current()->children); e = list_next(&e_copy)) {
+  for (e = list_begin(&thread_current()->children); e != list_end(&thread_current()->children);
+       e = list_next(&e_copy)) {
     e_copy = *e;
     struct thread_context* context = list_entry(e, struct thread_context, elem);
     lock_acquire(&context->lock);
@@ -231,9 +232,7 @@ void process_exit(void) {
   while (!list_empty(&cur->file_descriptors)) {
     e = list_pop_front(&cur->file_descriptors);
     struct file_descriptor* f = list_entry(e, struct file_descriptor, elem);
-    lock_acquire(&filesys_lock);
     file_close(f->f_ptr);
-    lock_release(&filesys_lock);
     free(f);
   }
   sema_up(&cur->self->sema);
