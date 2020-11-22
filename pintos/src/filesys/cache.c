@@ -55,8 +55,8 @@ struct cache_entry* get_cache_entry(struct block* b, block_sector_t sec) {
     if (entry->sector == sec) {
       list_remove(e);
       list_push_front(&cache, e);
-      lock_release(&cache_lookup_lock);
       lock_acquire(&entry->lck);
+      lock_release(&cache_lookup_lock);
       return entry;
     }
   }
