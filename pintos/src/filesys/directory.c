@@ -5,7 +5,7 @@
 #include "filesys/filesys.h"
 #include "filesys/inode.h"
 #include "threads/malloc.h"
-
+#include "threads/thread.h"
 /* A directory. */
 struct dir {
   struct inode* inode; /* Backing store. */
@@ -199,3 +199,25 @@ bool dir_readdir(struct dir* dir, char name[NAME_MAX + 1]) {
   }
   return false;
 }
+
+bool filesys_chdir(const char *dir) {
+  if (dir == NULL || strcmp(dir, "") == 0)
+    return false;
+  struct thread *t = thread_current();
+  struct inode *new_dir = walk_path(dir);
+  if (!new_dir)
+    return false;
+  struct dir *dir_n = dir_open(new_dir);
+  if (dir != NULL) {
+    dir_close(t->cwd);
+    t->cwd = dir_n;
+    return true;
+  }
+  return false;
+}
+
+
+
+
+
+
