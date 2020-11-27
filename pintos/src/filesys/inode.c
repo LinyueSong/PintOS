@@ -11,16 +11,17 @@
 
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
-#define DIRECT_MAX 124 * 512
-#define INDIRECT_MAX 124 * 512 + 128 * 512
-#define DOUBLE_MAX 124 * 512 + 128 * 512 + 128 * 128 * 512
+#define DIRECT_MAX 123 * 512
+#define INDIRECT_MAX 123 * 512 + 128 * 512
+#define DOUBLE_MAX 123 * 512 + 128 * 512 + 128 * 128 * 512
 
 /* On-disk inode.
    Must be exactly BLOCK_SECTOR_SIZE bytes long. */
 struct inode_disk {
   off_t length;         /* File size in bytes. */
+  int is_dir;
   unsigned magic;       /* Magic number. */
-  block_sector_t direct[124];       /* 124 direct pointer */
+  block_sector_t direct[123];       /* 124 direct pointer */
   block_sector_t indirect;          /* indirect_pointer */
   block_sector_t double_indirect;   /* double_indirect_pointer */
 };
@@ -94,7 +95,7 @@ bool inode_resize_unsafe(block_sector_t id_sector, off_t size) {
   block_read_cached(fs_device, id_sector, id, 0, BLOCK_SECTOR_SIZE);
   block_sector_t sector;
   /* Direct pointers */
-  for (int i = 0; i < 124; i++) {
+  for (int i = 0; i < 123; i++) {
     /* Shrink */
     if (size <= 512 * i && id->direct[i] != 0) {
       free_map_release(id->direct[i], 1);
@@ -112,7 +113,7 @@ bool inode_resize_unsafe(block_sector_t id_sector, off_t size) {
     }
   }
   /* If the direct pointers are sufficient, return */
-  if (id->indirect == 0 && size <= 124 * 512) {
+  if (id->indirect == 0 && size <= 123 * 512) {
     id->length = size;
     block_write_cached(fs_device, id_sector, id, 0, BLOCK_SECTOR_SIZE); 
     free(id);
@@ -137,12 +138,12 @@ bool inode_resize_unsafe(block_sector_t id_sector, off_t size) {
   /* Allocate sectors for each pointer on intermediate sector if neceessary*/
   for (int i = 0; i < 128; i++) {
     /* Shrink */
-    if (size <= (124 + i) * 512 && buffer[i] != 0) {
+    if (size <= (123 + i) * 512 && buffer[i] != 0) {
       free_map_release(buffer[i], 1);
       buffer[i] = 0;
     }
     /* Expand */
-    if (size > (124 + i) * 512 && buffer[i] == 0) {
+    if (size > (123 + i) * 512 && buffer[i] == 0) {
       if (!free_map_allocate(1, &sector)) { // Handle failure
         inode_resize_unsafe(id, id->length);
         free(buffer);
@@ -208,12 +209,12 @@ bool inode_resize_unsafe(block_sector_t id_sector, off_t size) {
     /* Iterate through layer2 intermediate sector */
     for (int j = 0; j < 128; j++) {
       /* Shrink */
-      if (size <= 124 * 512 + 128 * 512 + i * 128 * 512 + j * 512 && buffer2[j] != 0) {
+      if (size <= 123 * 512 + 128 * 512 + i * 128 * 512 + j * 512 && buffer2[j] != 0) {
         free_map_release(buffer2[j], 1);
         buffer2[j] = 0;
       }
       /* Expand */
-      if (size > 124 * 512 + 128 * 512 + i * 128 * 512 + j * 512 && buffer2[j] == 0) {
+      if (size > 123 * 512 + 128 * 512 + i * 128 * 512 + j * 512 && buffer2[j] == 0) {
         if (!free_map_allocate(1, &sector)) { // Handle failure
           inode_resize_unsafe(id, id->length);
           free(buffer);
@@ -247,7 +248,7 @@ void inode_init(void) {
    device.
    Returns true if successful.
    Returns false if memory or disk allocation fails. */
-bool inode_create(block_sector_t sector, off_t length) {
+bool inode_create(block_sector_t sector, off_t length, int is_dir) {
   struct inode_disk* disk_inode = NULL;
   bool success = false;
 
@@ -261,6 +262,7 @@ bool inode_create(block_sector_t sector, off_t length) {
   if (disk_inode != NULL) {
     disk_inode->length = 0;
     disk_inode->magic = INODE_MAGIC;
+    disk_inode->is_dir = is_dir;
     block_write_cached(fs_device, sector, disk_inode, 0, BLOCK_SECTOR_SIZE);
     success = inode_resize_unsafe(sector, length);
     free(disk_inode);

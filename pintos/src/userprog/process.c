@@ -122,6 +122,10 @@ static void start_process(void* context_) {
   /* Initialize file descriptor num to 3 */
   thread_current()->next_fd = 2;
 
+  /* Set current working directory */
+  if (thread_current()->cwd == NULL)
+    thread_current()->cwd = dir_open_root();
+
   /* Notify the parent process that loading is done */
   sema_up(&(context->sema));
 

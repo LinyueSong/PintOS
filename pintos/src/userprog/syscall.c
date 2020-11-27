@@ -130,6 +130,14 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       break;
     case SYS_HALT:
       shutdown_power_off();
+      break;
+    case SYS_MKDIR:
+    if (!check_addr(args + 4, 4)) {
+        syscall_exit(-1, f);
+      }
+    syscall_mkdir((char*)args[1], f);
+    break;
+
     default:
       /* PANIC? */
       syscall_exit(-1, f);
@@ -145,7 +153,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 void syscall_create(const char* file, unsigned initial_size, struct intr_frame* f) {
   if (!check_addr(file, 0))
     syscall_exit(-1, f);
-  f->eax = filesys_create(file, initial_size);
+  f->eax = filesys_create(file, initial_size, 1);
 }
 
 /* HELPER FUNCTION 
@@ -419,3 +427,18 @@ void syscall_exec(const char* cmd, struct intr_frame* f) {
  * @pid, child's process id to wait for.
  */
 void syscall_wait(tid_t pid, struct intr_frame* f) { f->eax = process_wait(pid); }
+
+
+
+void syscall_mkdir(char* path, struct intr_frame* f) {
+  f->eax = filesys_create(path, 0, 1);
+}
+
+
+
+
+
+
+
+
+

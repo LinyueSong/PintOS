@@ -28,6 +28,7 @@ struct file_descriptor {
   struct list_elem elem;
   int fd;
   struct file* f_ptr;
+  int is_dir;
 };
 
 /* States in a thread's life cycle. */
@@ -119,6 +120,7 @@ struct thread {
 
   struct list file_descriptors;
   int next_fd;
+  struct dir* cwd;
 
 #ifdef USERPROG
   /* Owned by userprog/process.c. */
