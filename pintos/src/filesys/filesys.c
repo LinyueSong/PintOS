@@ -75,9 +75,14 @@ bool filesys_create(const char* name, off_t initial_size, int is_dir) {
   if (is_dir) {
     block_sector_t self = inode_sector;
     block_sector_t parent = dir->inode->sector;
+
+    block_sector_t d_self = 0;
+    block_sector_t d_parent = 0;
+
     struct dir *new_dir = dir_open(walk_path(name));
     lock_acquire(&new_dir->inode->dir_lock);
-    success = dir_add(new_dir, ".", self, 1) && dir_add(new_dir, "..", parent, 1);
+    success = (free_map_allocate(1, &d_self) && free_map_allocate(1, &d_parent) && inode_create(d_self, 0, 1)
+              && inode_create(d_parent, 0, 1) && dir_add(new_dir, ".", self, 1) && dir_add(new_dir, "..", parent, 1));
     lock_release(&new_dir->inode->dir_lock);
     dir_close(new_dir);
   }
@@ -151,19 +156,21 @@ bool filesys_remove(const char* name) {
   if (!split_path_to_directory(name, pt))
     return false;
 
-  char *parent_dir = malloc(sizeof(char) * (strlen(name) + 4));
-  memcpy(parent_dir, name, strlen(name));
-  parent_dir[strlen(name)] = '/';
-  parent_dir[strlen(name)+1] = '.';
-  parent_dir[strlen(name)+2] = '.';
-  parent_dir[strlen(name)+3] = '\0';
+  // char *parent_dir = malloc(sizeof(char) * (strlen(name) + 4));
+  // memcpy(parent_dir, name, strlen(name));
+  // parent_dir[strlen(name)] = '/';
+  // parent_dir[strlen(name)+1] = '.';
+  // parent_dir[strlen(name)+2] = '.';
+  // parent_dir[strlen(name)+3] = '\0';
   if (thread_current()->cwd == NULL)
     dir = dir_open_root();
+  else if (!pt->path_to_dir)
+    dir = dir_reopen(thread_current()->cwd);
   else
-    dir= dir_open(walk_path(parent_dir));
+    dir= dir_open(walk_path(pt->path_to_dir));
 
 
-  bool success = dir != NULL && dir_remove(dir, name);
+  bool success = dir != NULL && dir_remove(dir, pt->new_dir_name);
   dir_close(dir);
 
   return success;
@@ -212,14 +219,14 @@ struct inode *walk_path(char *name) {
   while ((i = get_next_part(next_dir, &name)) != 0) {
     //printf("i is: %d\n", i);
     //printf("next_dir is: %s\n", next_dir);
-    if (!strcmp(&next_dir, "."))
-      continue;
-    if (!strcmp(&next_dir, "..")) {
-      dir_close(cur_dir);
-      cur_dir = parent;
-      cur_inode = parent->inode;
-      continue;
-    }
+    // if (!strcmp(&next_dir, "."))
+    //   continue;
+    // if (!strcmp(&next_dir, "..")) {
+    //   dir_close(cur_dir);
+    //   cur_dir = parent;
+    //   cur_inode = parent->inode;
+    //   continue;
+    // }
 
 
     if (i == -1) {
@@ -232,16 +239,16 @@ struct inode *walk_path(char *name) {
     }
     else {
       //printf("I'm null curinode in walk path: name is: %s    and cur_inode->sector is: %d\n ", name, cur_inode->sector);
-      //dir_close(cur_dir);
-      if (!parent)
-        dir_close(parent);
-      parent = cur_dir;
+      dir_close(cur_dir);
+      // if (!parent)
+      //   dir_close(parent);
+      // parent = cur_dir;
       cur_dir = dir_open(cur_inode);
     }
   }
-  if (!parent)
-    dir_close(parent);
-  dir_close(cur_dir);
+  // if (!parent)
+  //   dir_close(parent);
+  //dir_close(cur_dir);
   return cur_inode;
 }
 

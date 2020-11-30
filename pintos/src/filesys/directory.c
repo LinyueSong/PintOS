@@ -164,12 +164,13 @@ bool dir_remove(struct dir* dir, const char* name) {
     goto done;
 
 
+  // NEED TO GET TO UNDERSTAND IF THIS IS A DIRECTORY BEFORE REMOVING, CALL READ ON E.INODE_SECTOR
   /* Check if "." and ".." are the only directories left in dir */
-  char d_name[NAME_MAX + 1];
-  while (dir_readdir(dir,d_name)) {
-    if (d_name[0] != '.')
-      return false;
-  }
+  // char d_name[NAME_MAX + 1];
+  // while (dir_readdir(dir,d_name)) {
+  //   if (d_name[0] != '.')
+  //     return false;
+  // }
 
   /* Erase directory entry. */
   e.in_use = false;
