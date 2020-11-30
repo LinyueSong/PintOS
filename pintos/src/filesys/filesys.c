@@ -45,7 +45,6 @@ bool filesys_create(const char* name, off_t initial_size, int is_dir) {
   block_sector_t inode_sector = 0;
   struct dir* dir;
   struct split_path *pt = (struct split_path*) malloc(sizeof(struct split_path));
-  struct inode *in_to_dir;
 
   /* Split name in path to dir and name of the file */
   if (!split_path_to_directory(name, pt))
@@ -58,12 +57,21 @@ bool filesys_create(const char* name, off_t initial_size, int is_dir) {
   else
     dir= dir_open(walk_path(pt->path_to_dir));
 
-
+  /* Acquire a lock on the directory */
+  lock_acquire(&dir->inode->dir_lock);
+  
   bool success = (dir != NULL && free_map_allocate(1, &inode_sector) &&
-                  inode_create(inode_sector, initial_size, is_dir) && dir_add(dir, name, inode_sector));
+                  inode_create(inode_sector, initial_size, is_dir) && dir_add(dir, pt->new_dir_name, inode_sector));
   if (!success && inode_sector != 0)
     free_map_release(inode_sector, 1);
+
+  /* Release the lock on the directory */
+  lock_release(&dir->inode->dir_lock);
+  
   dir_close(dir);
+  free(pt->path_to_dir);
+  free(pt->new_dir_name);
+  free(pt);
 
   return success;
 }
@@ -74,14 +82,46 @@ bool filesys_create(const char* name, off_t initial_size, int is_dir) {
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 struct file* filesys_open(const char* name) {
-  struct dir* dir = dir_open_root();
   struct inode* inode = NULL;
+  struct dir* dir; //= dir_open_root();
+  struct split_path *pt = (struct split_path*) malloc(sizeof(struct split_path));
+
+  /* Split name in path to dir and name of the file */
+  if (!split_path_to_directory(name, pt))
+    return false;
+
+  if (thread_current()->cwd == NULL)
+    dir = dir_open_root();
+  else if (!pt->path_to_dir)
+    dir = dir_reopen(thread_current()->cwd);
+  else
+    dir= dir_open(walk_path(pt->path_to_dir));
+  
 
   if (dir != NULL)
     dir_lookup(dir, name, &inode);
   dir_close(dir);
 
-  return file_open(inode);
+  if (inode == NULL) {
+    return NULL;
+  }
+
+  struct inode_disk *ind_disk = (struct inode_disk*) malloc(sizeof(struct inode_disk));
+  block_read_cached(fs_device, inode->sector, ind_disk, 0, sizeof(struct inode_disk));
+
+  if (ind_disk->is_dir){
+    free(ind_disk);
+    free(pt->path_to_dir);
+    free(pt->new_dir_name);
+    free(pt);
+    return dir_open(inode);
+  } else {
+    free(ind_disk);
+    free(pt->path_to_dir);
+    free(pt->new_dir_name);
+    free(pt);
+    return file_open(inode);
+  }
 }
 
 /* Deletes the file named NAME.

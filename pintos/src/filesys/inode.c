@@ -41,7 +41,8 @@ struct inode {
   struct lock meta_lock;  /* Lock for inode metadata */
   struct lock dny_w_lock; /* Lock for deny write cnt */
   struct condition dny_w_cond; /* Condition variable for deny write cnt */
-  int writers;        /* Indicate  */
+  int writers;            /* Indicate  */
+  struct lock dir_lock ;   /* Lock on directory */
 };
 
 /* Returns the block device sector that contains byte offset POS

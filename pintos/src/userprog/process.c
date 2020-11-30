@@ -125,6 +125,9 @@ static void start_process(void* context_) {
   /* Set current working directory */
   if (thread_current()->cwd == NULL)
     thread_current()->cwd = dir_open_root();
+  else {
+    thread_current()->cwd = dir_reopen(thread_current()->cwd);
+  }
 
   /* Notify the parent process that loading is done */
   sema_up(&(context->sema));
@@ -231,6 +234,9 @@ void process_exit(void) {
       lock_release(&context->lock);
     }
   }
+
+  if (cur->cwd != NULL)
+    dir_close(cur->cwd);
 
   /* Free file descriptors */
   while (!list_empty(&cur->file_descriptors)) {

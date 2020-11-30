@@ -11,6 +11,8 @@
 #include "threads/vaddr.h"
 #include "devices/shutdown.h"
 
+
+
 static void syscall_handler(struct intr_frame*);
 void syscall_create(const char* file, unsigned initial_size, struct intr_frame* f);
 void syscall_remove(const char* file, struct intr_frame* f);
@@ -22,6 +24,7 @@ void syscall_seek(int fd, unsigned position, struct intr_frame* f);
 void syscall_tell(int fd, struct intr_frame* f);
 void syscall_close(int fd, struct intr_frame* f);
 void syscall_exit(int status, struct intr_frame* f);
+void syscall_chdir(char* name, struct intr_frame *f);
 bool valid_fd(int fd_user);
 struct file* get_f_ptr(int fd);
 struct file_descriptor* get_fd_struct(int fd);
@@ -137,6 +140,12 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       }
     syscall_mkdir((char*)args[1], f);
     break;
+    case SYS_CHDIR:
+    if (!check_addr(args + 4, 4)) {
+        syscall_exit(-1, f);
+      }
+    syscall_chdir((char*) args[1],f);
+    break;
 
     default:
       /* PANIC? */
@@ -153,7 +162,7 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
 void syscall_create(const char* file, unsigned initial_size, struct intr_frame* f) {
   if (!check_addr(file, 0))
     syscall_exit(-1, f);
-  f->eax = filesys_create(file, initial_size, 1);
+  f->eax = filesys_create(file, initial_size, 0);
 }
 
 /* HELPER FUNCTION 
@@ -176,6 +185,10 @@ void syscall_open(const char* file, struct intr_frame* f) {
   if (!check_addr(file, -1)) {
     syscall_exit(-1, f);
   }
+  if (strcmp(file, "") == 0) {
+    f->eax = -1;
+    return;
+  }
   struct file_descriptor* file_des = malloc(sizeof(struct file_descriptor));
   if (file_des == NULL) {
     f->eax = -1;
@@ -187,6 +200,10 @@ void syscall_open(const char* file, struct intr_frame* f) {
     free(file_des);
     return;
   }
+
+  /* Sets the file_descritpro is_dir */
+  set_is_dir(file_des);
+  
   file_des->fd = thread_current()->next_fd++;
   list_push_back(&(thread_current()->file_descriptors), &(file_des->elem));
   f->eax = file_des->fd;
@@ -434,7 +451,9 @@ void syscall_mkdir(char* path, struct intr_frame* f) {
   f->eax = filesys_create(path, 0, 1);
 }
 
-
+void syscall_chdir(char* name, struct intr_frame *f) {
+  f->eax = filesys_chdir(name);
+}
 
 
 
