@@ -72,15 +72,15 @@ bool filesys_create(const char* name, off_t initial_size, int is_dir) {
   lock_release(&dir->inode->dir_lock);
 
   /* If we create a new directory we add "." and ".." to it */
-  // if (is_dir) {
-  //   block_sector_t self = inode_sector;
-  //   block_sector_t parent = dir->inode->sector;
-  //   struct dir *new_dir = dir_open(walk_path(name));
-  //   lock_acquire(&new_dir->inode->dir_lock);
-  //   success = dir_add(new_dir, ".", self, 1) && dir_add(new_dir, "..", parent, 1);
-  //   lock_release(&new_dir->inode->dir_lock);
-  //   dir_close(new_dir);
-  // }
+  if (is_dir) {
+    block_sector_t self = inode_sector;
+    block_sector_t parent = dir->inode->sector;
+    struct dir *new_dir = dir_open(walk_path(name));
+    lock_acquire(&new_dir->inode->dir_lock);
+    success = dir_add(new_dir, ".", self, 1) && dir_add(new_dir, "..", parent, 1);
+    lock_release(&new_dir->inode->dir_lock);
+    dir_close(new_dir);
+  }
 
   
   dir_close(dir);
@@ -144,22 +144,23 @@ struct file* filesys_open(const char* name) {
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 bool filesys_remove(const char* name) {
-    struct dir* dir= dir_open_root();
-  // struct split_path *pt = (struct split_path*) malloc(sizeof(struct split_path));
+    struct dir* dir;//= dir_open_root();
+  struct split_path *pt = (struct split_path*) malloc(sizeof(struct split_path));
 
-  // /* Split name in path to dir and name of the file */
-  // if (!split_path_to_directory(name, pt))
-  //   return false;
+  /* Split name in path to dir and name of the file */
+  if (!split_path_to_directory(name, pt))
+    return false;
 
-  // char *parent_dir = malloc(sizeof(char) * (strlen(name) + 3));
-  // memcpy(parent_dir, name, strlen(name));
-  // parent_dir[strlen(name)] = '.';
-  // parent_dir[strlen(name)+1] = '.';
-  // parent_dir[strlen(name)+2] = '\0';
-  // if (thread_current()->cwd == NULL)
-  //   dir = dir_open_root();
-  // else
-  //   dir= dir_open(walk_path(parent_dir));
+  char *parent_dir = malloc(sizeof(char) * (strlen(name) + 4));
+  memcpy(parent_dir, name, strlen(name));
+  parent_dir[strlen(name)] = '/';
+  parent_dir[strlen(name)+1] = '.';
+  parent_dir[strlen(name)+2] = '.';
+  parent_dir[strlen(name)+3] = '\0';
+  if (thread_current()->cwd == NULL)
+    dir = dir_open_root();
+  else
+    dir= dir_open(walk_path(parent_dir));
 
 
   bool success = dir != NULL && dir_remove(dir, name);
@@ -198,6 +199,7 @@ void set_is_dir(struct file_descriptor *file_des) {
 struct inode *walk_path(char *name) {
   struct thread *t = thread_current();
   struct dir *cur_dir;
+  struct dir *parent = NULL;
   char next_dir[NAME_MAX + 1];
   int i;
   if (name[0] == '/' || t->cwd == NULL) 
@@ -210,22 +212,36 @@ struct inode *walk_path(char *name) {
   while ((i = get_next_part(next_dir, &name)) != 0) {
     //printf("i is: %d\n", i);
     //printf("next_dir is: %s\n", next_dir);
+    if (!strcmp(&next_dir, "."))
+      continue;
+    if (!strcmp(&next_dir, "..")) {
+      dir_close(cur_dir);
+      cur_dir = parent;
+      cur_inode = parent->inode;
+      continue;
+    }
+
 
     if (i == -1) {
       return NULL;
     }
+
     if (!dir_lookup(cur_dir, &next_dir, &cur_inode)) {
       dir_close(cur_dir);
       return NULL;
     }
     else {
       //printf("I'm null curinode in walk path: name is: %s    and cur_inode->sector is: %d\n ", name, cur_inode->sector);
-      dir_close(cur_dir);
+      //dir_close(cur_dir);
+      if (!parent)
+        dir_close(parent);
+      parent = cur_dir;
       cur_dir = dir_open(cur_inode);
     }
   }
-
-  //dir_close(cur_dir);
+  if (!parent)
+    dir_close(parent);
+  dir_close(cur_dir);
   return cur_inode;
 }
 
