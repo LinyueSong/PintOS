@@ -135,17 +135,17 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       shutdown_power_off();
       break;
     case SYS_MKDIR:
-    if (!check_addr(args + 4, 4)) {
+      if (!check_addr(args + 4, 4)) {
         syscall_exit(-1, f);
       }
-    syscall_mkdir((char*)args[1], f);
-    break;
+      syscall_mkdir((char*)args[1], f);
+      break;
     case SYS_CHDIR:
-    if (!check_addr(args + 4, 4)) {
+      if (!check_addr(args + 4, 4)) {
         syscall_exit(-1, f);
       }
-    syscall_chdir((char*) args[1],f);
-    break;
+      syscall_chdir((char*) args[1],f);
+      break;
 
     default:
       /* PANIC? */
@@ -454,7 +454,8 @@ void syscall_wait(tid_t pid, struct intr_frame* f) { f->eax = process_wait(pid);
 
 
 void syscall_mkdir(char* path, struct intr_frame* f) {
-  f->eax = filesys_create(path, 0, 1);
+  /* It is important to set the size=2 since we will add "." and ".." */
+  f->eax = filesys_create(path, 2, 1);
 }
 
 void syscall_chdir(char* name, struct intr_frame *f) {
