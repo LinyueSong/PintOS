@@ -163,6 +163,14 @@ bool dir_remove(struct dir* dir, const char* name) {
   if (inode == NULL)
     goto done;
 
+
+  /* Check if "." and ".." are the only directories left in dir */
+  // char d_name[NAME_MAX + 1];
+  // while (dir_readdir(dir,d_name)) {
+  //   if (d_name[0] != '.')
+  //     return false;
+  // }
+
   /* Erase directory entry. */
   e.in_use = false;
   if (inode_write_at(dir->inode, &e, sizeof e, ofs) != sizeof e)
