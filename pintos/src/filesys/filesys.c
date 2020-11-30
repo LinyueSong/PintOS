@@ -50,7 +50,7 @@ bool filesys_create(const char* name, off_t initial_size, int is_dir) {
   struct split_path *pt = (struct split_path*) malloc(sizeof(struct split_path));
 
   /* Split name in path to dir and name of the file */
-  if (!split_path_to_directory(name, pt))
+  if (!split_path_to_directory(name, pt) || strcmp(name, "") == 0)
     return false;
 
   if (thread_current()->cwd == NULL)
@@ -64,12 +64,25 @@ bool filesys_create(const char* name, off_t initial_size, int is_dir) {
   lock_acquire(&dir->inode->dir_lock);
   
   bool success = (dir != NULL && free_map_allocate(1, &inode_sector) &&
-                  inode_create(inode_sector, initial_size, is_dir) && dir_add(dir, pt->new_dir_name, inode_sector));
+                  inode_create(inode_sector, initial_size, is_dir) && dir_add(dir, pt->new_dir_name, inode_sector, is_dir));
   if (!success && inode_sector != 0)
     free_map_release(inode_sector, 1);
 
   /* Release the lock on the directory */
   lock_release(&dir->inode->dir_lock);
+
+  /* If we create a new directory we add "." and ".." to it */
+  if (is_dir) {
+    block_sector_t self = inode_sector;
+    block_sector_t parent = dir->inode->sector;
+    struct dir *new_dir = dir_open(walk_path(name));
+    lock_acquire(&new_dir->inode->dir_lock);
+    success = dir_add(new_dir, ".", self, 1) && dir_add(new_dir, "..", parent, 1);
+    lock_release(&new_dir->inode->dir_lock);
+    dir_close(new_dir);
+    
+  }
+
   
   dir_close(dir);
   free(pt->path_to_dir);
