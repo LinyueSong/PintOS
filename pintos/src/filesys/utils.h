@@ -23,6 +23,7 @@ struct dir_entry {
 struct split_path {
   char *path_to_dir;   
   char *new_dir_name;
+  int is_null;
 };
 
 struct inode_disk {

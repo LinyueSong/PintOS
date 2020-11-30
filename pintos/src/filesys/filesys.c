@@ -16,6 +16,8 @@ struct block* fs_device;
 static void do_format(void);
 bool split_path_to_directory(const char *path, struct split_path *pt);
 
+
+
 /* Initializes the file system module.
    If FORMAT is true, reformats the file system. */
 void filesys_init(bool format) {
@@ -42,6 +44,7 @@ void filesys_done(void) { free_map_close(); }
    Fails if a file named NAME already exists,
    or if internal memory allocation fails. */
 bool filesys_create(const char* name, off_t initial_size, int is_dir) {
+
   block_sector_t inode_sector = 0;
   struct dir* dir;
   struct split_path *pt = (struct split_path*) malloc(sizeof(struct split_path));
@@ -99,7 +102,7 @@ struct file* filesys_open(const char* name) {
   
 
   if (dir != NULL)
-    dir_lookup(dir, name, &inode);
+    dir_lookup(dir, pt->new_dir_name, &inode);
   dir_close(dir);
 
   if (inode == NULL) {
@@ -166,14 +169,18 @@ void set_is_dir(struct file_descriptor *file_des) {
 struct inode *walk_path(char *name) {
   struct thread *t = thread_current();
   struct dir *cur_dir;
-  struct inode *cur_inode = NULL;
   char next_dir[NAME_MAX + 1];
   int i;
   if (name[0] == '/' || t->cwd == NULL) 
     cur_dir = dir_open_root();
   else 
     cur_dir = dir_reopen(t->cwd);
+
+  struct inode *cur_inode = cur_dir->inode;
+
   while ((i = get_next_part(next_dir, &name)) != 0) {
+    //printf("i is: %d\n", i);
+    //printf("next_dir is: %s\n", next_dir);
 
     if (i == -1) {
       return NULL;
@@ -188,6 +195,8 @@ struct inode *walk_path(char *name) {
       cur_dir = dir_open(cur_inode);
     }
   }
+
+  //dir_close(cur_dir);
   return cur_inode;
 }
 
@@ -222,6 +231,7 @@ bool split_path_to_directory(const char *path, struct split_path *pt) {
 
   if (!strchr(path, '/')) {
     pt->path_to_dir = NULL;
+    pt->is_null = 1;
     pt->new_dir_name = (char*)malloc(sizeof(char) * (strlen(path) + 1));
     memcpy(pt->new_dir_name, path, strlen(path));
     pt->new_dir_name[strlen(path)] = '\0';
@@ -232,6 +242,7 @@ bool split_path_to_directory(const char *path, struct split_path *pt) {
     bool done_with_path = false;
     char *ptr = path;
     char *dir_name;
+    pt->is_null =0;
 
     /* Find the length of the path and dir name */
     for (; *ptr != 0; ptr++) {
@@ -254,8 +265,5 @@ bool split_path_to_directory(const char *path, struct split_path *pt) {
   }
   return false;
 }
-
-
-
 
 
