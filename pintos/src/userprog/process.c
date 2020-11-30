@@ -242,7 +242,11 @@ void process_exit(void) {
   while (!list_empty(&cur->file_descriptors)) {
     e = list_pop_front(&cur->file_descriptors);
     struct file_descriptor* f = list_entry(e, struct file_descriptor, elem);
-    file_close(f->f_ptr);
+    /* Proj3, check what are we closing and make a decision accordingly) */
+    if (f->is_dir)
+      dir_close((struct dir*)f->f_ptr);
+    else
+      file_close((struct file*)f->f_ptr);
     free(f);
   }
   sema_up(&cur->self->sema);

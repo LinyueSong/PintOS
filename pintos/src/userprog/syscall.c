@@ -194,6 +194,7 @@ void syscall_open(const char* file, struct intr_frame* f) {
     f->eax = -1;
     return;
   }
+
   file_des->f_ptr = filesys_open(file);
   if (file_des->f_ptr == NULL) {
     f->eax = -1;
@@ -203,6 +204,7 @@ void syscall_open(const char* file, struct intr_frame* f) {
 
   /* Sets the file_descritpro is_dir */
   set_is_dir(file_des);
+
   
   file_des->fd = thread_current()->next_fd++;
   list_push_back(&(thread_current()->file_descriptors), &(file_des->elem));
@@ -249,7 +251,10 @@ void syscall_close(int fd, struct intr_frame* f) {
   if (file_descriptor_struct == NULL) {
     syscall_exit(-1, f);
   } else {
-    file_close(file_descriptor_struct->f_ptr);
+    if (file_descriptor_struct->is_dir)
+      dir_close((struct dir*)file_descriptor_struct->f_ptr);
+    else
+      file_close(file_descriptor_struct->f_ptr);
     list_remove(&(file_descriptor_struct->elem));
     free(file_descriptor_struct);
   }
@@ -266,6 +271,7 @@ void syscall_write(int fd, const void* buffer, unsigned size, struct intr_frame*
   if (!check_addr(buffer, size)) {
     syscall_exit(-1, f);
   }
+
   char* b = buffer;
   if (fd == 1) { /* Stdout case */
     putbuf(buffer, size);
@@ -273,7 +279,7 @@ void syscall_write(int fd, const void* buffer, unsigned size, struct intr_frame*
     return;
   } else {
     struct file* f_ptr = get_f_ptr(fd);
-    if (f_ptr == NULL) { /* File is not openned */
+    if (f_ptr == NULL || get_fd_struct(fd)->is_dir) { /* File is not openned or is a directory */
       f->eax = -1;
       syscall_exit(-1, f);
     }
