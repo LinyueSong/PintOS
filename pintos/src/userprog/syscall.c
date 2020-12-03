@@ -230,6 +230,7 @@ void syscall_open(const char* file, struct intr_frame* f) {
   if (file_des->is_dir)
     dir_open(file_des->f_ptr->inode);
 
+
   
   file_des->fd = thread_current()->next_fd++;
   list_push_back(&(thread_current()->file_descriptors), &(file_des->elem));
