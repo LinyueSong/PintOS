@@ -495,8 +495,8 @@ void syscall_readdir(int fd, char *name[NAME_MAX + 1], struct intr_frame *f) {
     f->eax = false;
     return;
   }
-  f->eax = dir_readdir(dir_open(file_des->f_ptr->inode), name);
-  dir_close(file_des->f_ptr);
+  f->eax = dir_readdir((struct dir*)file_des->f_ptr, name);
+  //dir_close(file_des->f_ptr);
 }
 
 

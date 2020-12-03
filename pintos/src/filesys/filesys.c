@@ -85,10 +85,10 @@ bool filesys_create(const char* name, off_t initial_size, int is_dir) {
     block_sector_t d_parent = 0;
 
     struct dir *new_dir = dir_open(walk_path(name));
-    lock_acquire(&new_dir->inode->dir_lock);
+    //lock_acquire(&new_dir->inode->dir_lock);
     success = (/*free_map_allocate(1, &d_self) && free_map_allocate(1, &d_parent) && inode_create(d_self, 0, 1)
               && inode_create(d_parent, 0, 1) && */ dir_add(new_dir, ".", self, 1) && dir_add(new_dir, "..", parent, 1));
-    lock_release(&new_dir->inode->dir_lock);
+    //lock_release(&new_dir->inode->dir_lock);
     dir_close(new_dir);
   }
 
