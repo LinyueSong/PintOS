@@ -81,8 +81,8 @@ bool filesys_create(const char* name, off_t initial_size, int is_dir) {
 
     struct dir *new_dir = dir_open(walk_path(name));
     lock_acquire(&new_dir->inode->dir_lock);
-    success = (free_map_allocate(1, &d_self) && free_map_allocate(1, &d_parent) && inode_create(d_self, 0, 1)
-              && inode_create(d_parent, 0, 1) && dir_add(new_dir, ".", self, 1) && dir_add(new_dir, "..", parent, 1));
+    success = (/*free_map_allocate(1, &d_self) && free_map_allocate(1, &d_parent) && inode_create(d_self, 0, 1)
+              && inode_create(d_parent, 0, 1) && */ dir_add(new_dir, ".", self, 1) && dir_add(new_dir, "..", parent, 1));
     lock_release(&new_dir->inode->dir_lock);
     dir_close(new_dir);
   }
@@ -120,6 +120,9 @@ struct file* filesys_open(const char* name) {
 
   if (dir != NULL)
     dir_lookup(dir, pt->new_dir_name, &inode);
+  if (pt->path_to_dir && !strcmp(pt->new_dir_name, ".") && !strcmp(pt->path_to_dir, "/")) {
+    inode = dir->inode;
+  }
   dir_close(dir);
 
   if (inode == NULL) {
@@ -313,6 +316,14 @@ bool split_path_to_directory(const char *path, struct split_path *pt) {
     memcpy(pt->new_dir_name, dir_name+1, size_of_dir);
     pt->path_to_dir[size_of_path] = '\0';
     pt->new_dir_name[size_of_dir] = '\0';
+
+    if (!strcmp(pt->new_dir_name, "")) {
+      free(pt->new_dir_name);
+      pt->new_dir_name = (char*)malloc(sizeof(char) * 2);
+      pt->new_dir_name[0] = '.';
+      pt->new_dir_name[1] = '\0';
+    }
+
     return true;
   }
   return false;

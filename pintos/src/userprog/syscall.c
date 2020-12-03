@@ -10,6 +10,7 @@
 #include "pagedir.h"
 #include "threads/vaddr.h"
 #include "devices/shutdown.h"
+#include "filesys/utils.h"
 
 
 
@@ -25,6 +26,9 @@ void syscall_tell(int fd, struct intr_frame* f);
 void syscall_close(int fd, struct intr_frame* f);
 void syscall_exit(int status, struct intr_frame* f);
 void syscall_chdir(char* name, struct intr_frame *f);
+void syscall_readdir(int fd, char *name[NAME_MAX + 1], struct intr_frame *f);
+void syscall_inumber(int fd, struct intr_frame *f);
+void syscall_isdir(int fd, struct intr_frame *f);
 bool valid_fd(int fd_user);
 struct file* get_f_ptr(int fd);
 struct file_descriptor* get_fd_struct(int fd);
@@ -145,6 +149,24 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
         syscall_exit(-1, f);
       }
       syscall_chdir((char*) args[1],f);
+      break;
+    case SYS_READDIR:
+      if (!check_addr(args + 4, 4)) {
+        syscall_exit(-1, f);
+      }
+      syscall_readdir((int) args[1], args[2], f);
+      break;
+    case SYS_ISDIR:
+      if (!check_addr(args + 4, 4)) {
+        syscall_exit(-1, f);
+      }
+      syscall_isdir((int)args[1], f);
+      break;
+    case SYS_INUMBER:
+      if (!check_addr(args + 4, 4)) {
+        syscall_exit(-1, f);
+      }
+      syscall_inumber((int)args[1], f);
       break;
 
     default:
@@ -462,7 +484,26 @@ void syscall_chdir(char* name, struct intr_frame *f) {
   f->eax = filesys_chdir(name);
 }
 
+void syscall_readdir(int fd, char *name[NAME_MAX + 1], struct intr_frame *f) {
+  struct file_descriptor *file_des = get_fd_struct(fd);
+  f->eax = dir_readdir(dir_open(file_des->f_ptr->inode), name);
+  dir_close(file_des->f_ptr);
+}
 
+
+void syscall_isdir(int fd, struct intr_frame *f) {
+  struct file_descriptor *f_des = get_fd_struct(fd);
+  if (!f_des)
+    f->eax = false;
+  f->eax = f_des->is_dir;
+}
+
+void syscall_inumber(int fd, struct intr_frame *f) {
+  struct file_descriptor *f_des = get_fd_struct(fd);
+  if (!f_des)
+    f->eax = false;
+  f->eax = inode_get_inumber(f_des->f_ptr->inode);
+}
 
 
 

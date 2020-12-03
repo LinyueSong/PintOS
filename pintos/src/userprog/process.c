@@ -20,6 +20,7 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "syscall.h"
+#include "filesys/utils.h"
 
 static thread_func start_process NO_RETURN;
 static bool load(const char* cmdline, void (**eip)(void), void** esp);
@@ -235,17 +236,17 @@ void process_exit(void) {
     }
   }
 
-  if (cur->cwd != NULL)
-    dir_close(cur->cwd);
+  // if (cur->cwd != NULL)
+  //   dir_close(cur->cwd);
 
   /* Free file descriptors */
   while (!list_empty(&cur->file_descriptors)) {
-    e = list_pop_front(&cur->file_descriptors);
+    e = list_pop_back(&cur->file_descriptors);
     struct file_descriptor* f = list_entry(e, struct file_descriptor, elem);
     /* Proj3, check what are we closing and make a decision accordingly) */
     if (f->is_dir)
       dir_close((struct dir*)f->f_ptr);
-    else
+    else 
       file_close((struct file*)f->f_ptr);
     free(f);
   }

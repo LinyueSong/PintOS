@@ -8,7 +8,7 @@
 #include "threads/thread.h"
 #include "filesys/utils.h"
 
-
+bool remove_self_parent(struct dir *dir, struct inode *inode);
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
 bool dir_create(block_sector_t sector, size_t entry_cnt) {
@@ -163,19 +163,34 @@ bool dir_remove(struct dir* dir, const char* name) {
   if (inode == NULL)
     goto done;
 
-
-  // NEED TO GET TO UNDERSTAND IF THIS IS A DIRECTORY BEFORE REMOVING, CALL READ ON E.INODE_SECTOR
   /* Check if "." and ".." are the only directories left in dir */
-  // char d_name[NAME_MAX + 1];
-  // while (dir_readdir(dir,d_name)) {
-  //   if (d_name[0] != '.')
-  //     return false;
+  // struct inode_disk *ind_disk = (struct inode_disk*) malloc(sizeof(struct inode_disk));
+  // block_read_cached(fs_device, inode->sector, ind_disk, 0, sizeof(struct inode_disk));
+  // if (ind_disk->is_dir) {
+  //   struct dir *dir_delete = dir_open(inode);
+  //   char d_name[NAME_MAX + 1];
+  //   while (dir_readdir(dir_delete, d_name)) {
+  //     if (d_name[0] != '.') {
+  //       inode_close(inode);
+  //       dir_close(dir_delete);
+  //       free(ind_disk);
+  //       return false;
+  //     }
+  //   } 
   // }
+  // free(ind_disk);
+  // NEED TO GET TO UNDERSTAND IF THIS IS A DIRECTORY BEFORE REMOVING, CALL READ ON E.INODE_SECTOR
+
+  /* Remove "." and ".." from directory */
+  if(!remove_self_parent(dir, inode))
+    PANIC("Cannot delte '.' and '..'");
 
   /* Erase directory entry. */
   e.in_use = false;
   if (inode_write_at(dir->inode, &e, sizeof e, ofs) != sizeof e)
     goto done;
+
+  
 
   /* Remove inode. */
   inode_remove(inode);
@@ -184,6 +199,26 @@ bool dir_remove(struct dir* dir, const char* name) {
 done:
   inode_close(inode);
   return success;
+}
+
+/* HELPER FUNCTION
+ * Removes "." and ".." from the DIR if needed
+ * @return: true on success, false otherwise
+ */
+bool remove_self_parent(struct dir *dir, struct inode *inode) {
+  ASSERT(dir != NULL);
+  struct dir_entry e;
+  off_t ofs;
+  char *name = ".";
+  for (int i = 0; i < 2; i++) {
+    if (!lookup(dir, name, &e, &ofs))
+      return false;
+    e.in_use = false;
+    if (inode_write_at(dir->inode, &e, sizeof e, ofs) != sizeof e)
+      return false;
+    name = "..";
+  }
+  return true;
 }
 
 /* Reads the next directory entry in DIR and stores the name in
@@ -195,6 +230,8 @@ bool dir_readdir(struct dir* dir, char name[NAME_MAX + 1]) {
   while (inode_read_at(dir->inode, &e, sizeof e, dir->pos) == sizeof e) {
     dir->pos += sizeof e;
     if (e.in_use) {
+      if (!strcmp(e.name, ".") || !strcmp(e.name, ".."))
+        continue;
       strlcpy(name, e.name, NAME_MAX + 1);
       return true;
     }
