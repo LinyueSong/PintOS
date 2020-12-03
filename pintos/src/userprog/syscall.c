@@ -227,6 +227,9 @@ void syscall_open(const char* file, struct intr_frame* f) {
   /* Sets the file_descritpro is_dir */
   set_is_dir(file_des);
 
+  if (file_des->is_dir)
+    dir_open(file_des->f_ptr->inode);
+
   
   file_des->fd = thread_current()->next_fd++;
   list_push_back(&(thread_current()->file_descriptors), &(file_des->elem));
@@ -486,6 +489,10 @@ void syscall_chdir(char* name, struct intr_frame *f) {
 
 void syscall_readdir(int fd, char *name[NAME_MAX + 1], struct intr_frame *f) {
   struct file_descriptor *file_des = get_fd_struct(fd);
+  if (file_des && file_des->f_ptr->inode->removed && file_des->is_dir) {
+    f->eax = false;
+    return;
+  }
   f->eax = dir_readdir(dir_open(file_des->f_ptr->inode), name);
   dir_close(file_des->f_ptr);
 }

@@ -55,9 +55,11 @@ bool filesys_create(const char* name, off_t initial_size, int is_dir) {
 
   if (thread_current()->cwd == NULL)
     dir = dir_open_root();
-  else if (!pt->path_to_dir)
+  else if (!pt->path_to_dir) {
+    if (thread_current()->cwd->inode->removed)
+      return false;
     dir = dir_reopen(thread_current()->cwd);
-  else
+  } else
     dir= dir_open(walk_path(pt->path_to_dir));
 
   /* Acquire a lock on the directory */
@@ -65,8 +67,11 @@ bool filesys_create(const char* name, off_t initial_size, int is_dir) {
   
   bool success = (dir != NULL && free_map_allocate(1, &inode_sector) &&
                   inode_create(inode_sector, initial_size, is_dir) && dir_add(dir, pt->new_dir_name, inode_sector, is_dir));
-  if (!success && inode_sector != 0)
+  if (!success && inode_sector != 0) {
     free_map_release(inode_sector, 1);
+    lock_release(&dir->inode->dir_lock);
+    goto done;
+  }
 
   /* Release the lock on the directory */
   lock_release(&dir->inode->dir_lock);
@@ -87,7 +92,7 @@ bool filesys_create(const char* name, off_t initial_size, int is_dir) {
     dir_close(new_dir);
   }
 
-  
+  done:
   dir_close(dir);
   free(pt->path_to_dir);
   free(pt->new_dir_name);

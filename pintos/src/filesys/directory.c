@@ -19,7 +19,7 @@ bool dir_create(block_sector_t sector, size_t entry_cnt) {
    it takes ownership.  Returns a null pointer on failure. */
 struct dir* dir_open(struct inode* inode) {
   struct dir* dir = calloc(1, sizeof *dir);
-  if (inode != NULL && dir != NULL) {
+  if (inode != NULL && dir != NULL && !inode->removed) {
     lock_init(&inode->dir_lock);
     dir->inode = inode;
     dir->pos = 0;
@@ -163,27 +163,36 @@ bool dir_remove(struct dir* dir, const char* name) {
   if (inode == NULL)
     goto done;
 
-  /* Check if "." and ".." are the only directories left in dir */
-  // struct inode_disk *ind_disk = (struct inode_disk*) malloc(sizeof(struct inode_disk));
-  // block_read_cached(fs_device, inode->sector, ind_disk, 0, sizeof(struct inode_disk));
-  // if (ind_disk->is_dir) {
-  //   struct dir *dir_delete = dir_open(inode);
-  //   char d_name[NAME_MAX + 1];
-  //   while (dir_readdir(dir_delete, d_name)) {
-  //     if (d_name[0] != '.') {
-  //       inode_close(inode);
-  //       dir_close(dir_delete);
-  //       free(ind_disk);
-  //       return false;
-  //     }
-  //   } 
+
+  //  struct inode_disk *ind_disk = (struct inode_disk*) malloc(sizeof(struct inode_disk));
+  //  block_read_cached(fs_device, inode->sector, ind_disk, 0, sizeof(struct inode_disk));
+  // if (!thread_current()->cwd && thread_current()->cwd->inode->sector == e.inode_sector) {
+  //   dir_close(thread_current()->cwd);
+  //   thread_current()->cwd = NULL;
   // }
-  // free(ind_disk);
+  /* Check if "." and ".." are the only directories left in dir */
+  struct inode_disk *ind_disk = (struct inode_disk*) malloc(sizeof(struct inode_disk));
+  block_read_cached(fs_device, inode->sector, ind_disk, 0, sizeof(struct inode_disk));
+  if (ind_disk->is_dir) {
+    struct dir *dir_delete = dir_open(inode);
+    char d_name[NAME_MAX + 1];
+    while (dir_readdir(dir_delete, d_name)) {
+      if (d_name[0] != '.') {
+        dir_close(dir_delete);
+        free(ind_disk);
+        return false;
+      }
+    } 
+  }
+  free(ind_disk);
   // NEED TO GET TO UNDERSTAND IF THIS IS A DIRECTORY BEFORE REMOVING, CALL READ ON E.INODE_SECTOR
 
+  
+
+
   /* Remove "." and ".." from directory */
-  if(!remove_self_parent(dir, inode))
-    PANIC("Cannot delte '.' and '..'");
+  // if(!remove_self_parent(dir, inode))
+  //   PANIC("Cannot delte '.' and '..'");
 
   /* Erase directory entry. */
   e.in_use = false;
@@ -247,7 +256,7 @@ bool filesys_chdir(const char *dir) {
   if (!new_dir)
     return false;
   struct dir *dir_n = dir_open(new_dir);
-  if (dir != NULL) {
+  if (dir_n != NULL) {
     dir_close(t->cwd);
     t->cwd = dir_n;
     return true;

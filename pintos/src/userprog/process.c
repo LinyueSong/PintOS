@@ -126,9 +126,9 @@ static void start_process(void* context_) {
   /* Set current working directory */
   if (thread_current()->cwd == NULL)
     thread_current()->cwd = dir_open_root();
-  else {
-    thread_current()->cwd = dir_reopen(thread_current()->cwd);
-  }
+  // else {
+  //   thread_current()->cwd = dir_reopen(thread_current()->cwd);
+  // }
 
   /* Notify the parent process that loading is done */
   sema_up(&(context->sema));
@@ -244,9 +244,9 @@ void process_exit(void) {
     e = list_pop_back(&cur->file_descriptors);
     struct file_descriptor* f = list_entry(e, struct file_descriptor, elem);
     /* Proj3, check what are we closing and make a decision accordingly) */
-    if (f->is_dir)
+    if (f->is_dir && !f->f_ptr->inode->removed)
       dir_close((struct dir*)f->f_ptr);
-    else 
+    else if (!f->is_dir)
       file_close((struct file*)f->f_ptr);
     free(f);
   }

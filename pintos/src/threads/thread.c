@@ -186,6 +186,11 @@ tid_t thread_create(const char* name, int priority, thread_func* function, void*
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  /* Inherit parent CWD */
+  if (thread_current()->cwd == NULL)
+    t->cwd = NULL;
+  else
+    t->cwd = dir_reopen(thread_current()->cwd);
   /* Add to run queue. */
   thread_unblock(t);
 
