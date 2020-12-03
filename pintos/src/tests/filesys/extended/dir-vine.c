@@ -17,18 +17,14 @@ void test_main(void) {
   int i;
 
   msg("creating many levels of files and directories...");
-
   quiet = true;
   CHECK(mkdir("start"), "mkdir \"start\"");
   CHECK(chdir("start"), "chdir \"start\"");
-  
   for (i = 0;; i++) {
     char name[3][READDIR_MAX_LEN + 1];
     char file_name[16], dir_name[16];
     char contents[128];
     int fd;
-
-    msg("passed chdir"); //
 
     /* Create file. */
     snprintf(file_name, sizeof file_name, "file%d", i);
@@ -50,7 +46,6 @@ void test_main(void) {
       break;
     }
 
-    printf("sart checking on readdir"); //
     /* Check for file and directory. */
     CHECK((fd = open(".")) > 1, "open \".\"");
     CHECK(readdir(fd, name[0]), "readdir \".\"");
