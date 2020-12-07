@@ -37,7 +37,10 @@ void filesys_init(bool format) {
 
 /* Shuts down the file system module, writing any unwritten data
    to disk. */
-void filesys_done(void) { free_map_close(); }
+void filesys_done(void) {
+  flush_cache();
+  free_map_close(); 
+}
 
 /* Creates a file named NAME with the given INITIAL_SIZE.
    Returns true if successful, false otherwise.
@@ -77,7 +80,7 @@ bool filesys_create(const char* name, off_t initial_size, int is_dir) {
   lock_release(&dir->inode->dir_lock);
 
   /* If we create a new directory we add "." and ".." to it */
-  if (is_dir) {
+  if (is_dir && success) {
     block_sector_t self = inode_sector;
     block_sector_t parent = dir->inode->sector;
 
@@ -181,6 +184,9 @@ bool filesys_remove(const char* name) {
   bool success = dir != NULL && dir_remove(dir, pt->new_dir_name);
   dir_close(dir);
 
+  free(pt->path_to_dir);
+  free(pt->new_dir_name);
+  free(pt);
   return success;
 }
 
@@ -225,17 +231,6 @@ struct inode *walk_path(char *name) {
   struct inode *cur_inode = cur_dir->inode;
 
   while ((i = get_next_part(next_dir, &name)) != 0) {
-    //printf("i is: %d\n", i);
-    //printf("next_dir is: %s\n", next_dir);
-    // if (!strcmp(&next_dir, "."))
-    //   continue;
-    // if (!strcmp(&next_dir, "..")) {
-    //   dir_close(cur_dir);
-    //   cur_dir = parent;
-    //   cur_inode = parent->inode;
-    //   continue;
-    // }
-
 
     if (i == -1) {
       return NULL;
@@ -291,7 +286,6 @@ bool split_path_to_directory(const char *path, struct split_path *pt) {
 
   if (!strchr(path, '/')) {
     pt->path_to_dir = NULL;
-    pt->is_null = 1;
     pt->new_dir_name = (char*)malloc(sizeof(char) * (strlen(path) + 1));
     memcpy(pt->new_dir_name, path, strlen(path));
     pt->new_dir_name[strlen(path)] = '\0';
@@ -302,7 +296,6 @@ bool split_path_to_directory(const char *path, struct split_path *pt) {
     bool done_with_path = false;
     char *ptr = path;
     char *dir_name;
-    pt->is_null =0;
 
     /* Find the length of the path and dir name */
     for (; *ptr != 0; ptr++) {

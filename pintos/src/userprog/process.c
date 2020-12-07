@@ -236,9 +236,6 @@ void process_exit(void) {
     }
   }
 
-  // if (cur->cwd != NULL)
-  //   dir_close(cur->cwd);
-
   /* Free file descriptors */
   while (!list_empty(&cur->file_descriptors)) {
     e = list_pop_back(&cur->file_descriptors);
@@ -250,7 +247,14 @@ void process_exit(void) {
       file_close((struct file*)f->f_ptr);
     free(f);
   }
+
+  // if (cur->cwd != NULL)
+  //   dir_close(cur->cwd);
+  
+
   sema_up(&cur->self->sema);
+
+
 }
 
 /* Sets up the CPU for running user code in the current

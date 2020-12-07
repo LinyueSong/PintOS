@@ -27,6 +27,20 @@ struct cache_entry {
 struct lock cache_lookup_lock;
 struct list cache;
 
+
+void flush_cache() {
+  struct list_elem* e;
+  for (e = list_begin(&cache);
+    e != list_end(&cache); e = list_next(e)) {
+    struct cache_entry* entry = list_entry(e, struct cache_entry, elem);
+    block_write(fs_device, entry->sector, entry->data);
+  }
+}
+
+
+
+
+
 /* Initializes the inode module. */
 void cache_init(void) {
   list_init(&cache);
