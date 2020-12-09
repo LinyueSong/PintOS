@@ -248,7 +248,7 @@ void process_exit(void) {
     free(f);
   }
 
-  // if (cur->cwd != NULL)
+  // if (cur->cwd->inode != NULL)
   //   dir_close(cur->cwd);
   
 

@@ -33,6 +33,7 @@ void flush_cache() {
   for (e = list_begin(&cache);
     e != list_end(&cache); e = list_next(e)) {
     struct cache_entry* entry = list_entry(e, struct cache_entry, elem);
+    list_remove(&entry->elem);
     block_write(fs_device, entry->sector, entry->data);
   }
 }
@@ -51,6 +52,7 @@ void block_read_cached(struct block* b, block_sector_t sec, void* buffer, int of
   struct cache_entry* cache = get_cache_entry(b, sec);
   memcpy(buffer, cache->data + offset, size);
   lock_release(&cache->lck);
+  //block_read(b, sec, buffer);
 }
 
 void block_write_cached(struct block* b, block_sector_t sec, void* buffer, int offset, int size) {
@@ -58,6 +60,7 @@ void block_write_cached(struct block* b, block_sector_t sec, void* buffer, int o
   memcpy(cache->data + offset, buffer, size);
   cache->dirty_bit = 1;
   lock_release(&cache->lck);
+  //block_write(b, sec, buffer+offset);
 }
 
 struct cache_entry* get_cache_entry(struct block* b, block_sector_t sec) {

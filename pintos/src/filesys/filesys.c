@@ -151,6 +151,10 @@ struct file* filesys_open(const char* name) {
     free(pt->path_to_dir);
     free(pt->new_dir_name);
     free(pt);
+    if(inode->sector > 322229) {
+    //barrier();
+      PANIC("PANIC PANIC PANIC \n\n\n\n\n\n");
+    }
     return file_open(inode);
   }
 }

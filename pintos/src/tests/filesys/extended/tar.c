@@ -164,6 +164,7 @@ static bool do_write(int fd, const char* buffer, int size, bool* write_error) {
     return true;
   else {
     if (!*write_error) {
+      msg("fd is: %d and the size is: %d \n", fd, size);
       printf("error writing archive\n");
       *write_error = true;
     }

@@ -9,6 +9,7 @@
 #include "threads/malloc.h"
 #include "threads/synch.h"
 
+
 /* Identifies an inode. */
 #define INODE_MAGIC 0x494e4f44
 #define DIRECT_MAX 123 * 512
@@ -77,6 +78,8 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
   free(di);
   free(buffer);
   lock_release(&inode->lookup_lock);
+
+
   return result;
 }
 bool inode_resize_unsafe(block_sector_t id_sector, off_t size);
@@ -105,7 +108,7 @@ bool inode_resize_unsafe(block_sector_t id_sector, off_t size) {
     /* Expand */
     if (size > 512 * i && id->direct[i] == 0) {
       if (!free_map_allocate(1, &sector)) {
-      (id, id->length);
+      inode_resize_unsafe(id_sector, id->length);
       free(id);
       return false;
       }
@@ -126,7 +129,7 @@ bool inode_resize_unsafe(block_sector_t id_sector, off_t size) {
     memset(buffer, 0, 512);
     /* Roll back */
     if (!free_map_allocate(1, &sector)) {
-      inode_resize_unsafe(id, id->length);
+      inode_resize_unsafe(id_sector, id->length);
       free(buffer);
       free(id);
       return false;
@@ -146,7 +149,7 @@ bool inode_resize_unsafe(block_sector_t id_sector, off_t size) {
     /* Expand */
     if (size > (123 + i) * 512 && buffer[i] == 0) {
       if (!free_map_allocate(1, &sector)) { // Handle failure
-        inode_resize_unsafe(id, id->length);
+        inode_resize_unsafe(id_sector, id->length);
         free(buffer);
         free(id);
         return false;
