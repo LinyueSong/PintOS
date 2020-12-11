@@ -146,7 +146,7 @@ struct file* filesys_open(const char* name) {
   free(pt->path_to_dir);
   free(pt->new_dir_name);
   free(pt);
-  if (directory){
+  if (directory) {
     return dir_open(inode);
   } else {
     return file_open(inode);
