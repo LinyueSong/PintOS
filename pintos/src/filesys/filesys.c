@@ -84,14 +84,8 @@ bool filesys_create(const char* name, off_t initial_size, int is_dir) {
     block_sector_t self = inode_sector;
     block_sector_t parent = dir->inode->sector;
 
-    block_sector_t d_self = 0;
-    block_sector_t d_parent = 0;
-
     struct dir *new_dir = dir_open(walk_path(name));
-    //lock_acquire(&new_dir->inode->dir_lock);
-    success = (/*free_map_allocate(1, &d_self) && free_map_allocate(1, &d_parent) && inode_create(d_self, 0, 1)
-              && inode_create(d_parent, 0, 1) && */ dir_add(new_dir, ".", self, 1) && dir_add(new_dir, "..", parent, 1));
-    //lock_release(&new_dir->inode->dir_lock);
+    success = (dir_add(new_dir, ".", self, 1) && dir_add(new_dir, "..", parent, 1));
     dir_close(new_dir);
   }
 
@@ -118,6 +112,7 @@ struct file* filesys_open(const char* name) {
   if (!split_path_to_directory(name, pt))
     return false;
 
+  
   if (thread_current()->cwd == NULL)
     dir = dir_open_root();
   else if (!pt->path_to_dir)
@@ -140,21 +135,14 @@ struct file* filesys_open(const char* name) {
   struct inode_disk *ind_disk = (struct inode_disk*) malloc(sizeof(struct inode_disk));
   block_read_cached(fs_device, inode->sector, ind_disk, 0, sizeof(struct inode_disk));
 
-  if (ind_disk->is_dir){
-    free(ind_disk);
-    free(pt->path_to_dir);
-    free(pt->new_dir_name);
-    free(pt);
+  int directory = ind_disk->is_dir;
+  free(ind_disk);
+  free(pt->path_to_dir);
+  free(pt->new_dir_name);
+  free(pt);
+  if (directory){
     return dir_open(inode);
   } else {
-    free(ind_disk);
-    free(pt->path_to_dir);
-    free(pt->new_dir_name);
-    free(pt);
-    if(inode->sector > 322229) {
-    //barrier();
-      PANIC("PANIC PANIC PANIC \n\n\n\n\n\n");
-    }
     return file_open(inode);
   }
 }
@@ -170,13 +158,6 @@ bool filesys_remove(const char* name) {
   /* Split name in path to dir and name of the file */
   if (!split_path_to_directory(name, pt))
     return false;
-
-  // char *parent_dir = malloc(sizeof(char) * (strlen(name) + 4));
-  // memcpy(parent_dir, name, strlen(name));
-  // parent_dir[strlen(name)] = '/';
-  // parent_dir[strlen(name)+1] = '.';
-  // parent_dir[strlen(name)+2] = '.';
-  // parent_dir[strlen(name)+3] = '\0';
   if (thread_current()->cwd == NULL)
     dir = dir_open_root();
   else if (!pt->path_to_dir)
@@ -214,7 +195,6 @@ void set_is_dir(struct file_descriptor *file_des) {
   struct inode *ind = (struct inode*)ret->inode;
   block_read_cached(fs_device, ind->sector, ind_disk, 0, sizeof(struct inode_disk));
   file_des->is_dir = ind_disk->is_dir;
-
   free(ind_disk);
 }
 
@@ -235,27 +215,18 @@ struct inode *walk_path(char *name) {
   struct inode *cur_inode = cur_dir->inode;
 
   while ((i = get_next_part(next_dir, &name)) != 0) {
-
     if (i == -1) {
       return NULL;
     }
-
     if (!dir_lookup(cur_dir, &next_dir, &cur_inode)) {
       dir_close(cur_dir);
       return NULL;
     }
     else {
-      //printf("I'm null curinode in walk path: name is: %s    and cur_inode->sector is: %d\n ", name, cur_inode->sector);
       dir_close(cur_dir);
-      // if (!parent)
-      //   dir_close(parent);
-      // parent = cur_dir;
       cur_dir = dir_open(cur_inode);
     }
   }
-  // if (!parent)
-  //   dir_close(parent);
-  //dir_close(cur_dir);
   return cur_inode;
 }
 
@@ -325,7 +296,6 @@ bool split_path_to_directory(const char *path, struct split_path *pt) {
       pt->new_dir_name[0] = '.';
       pt->new_dir_name[1] = '\0';
     }
-
     return true;
   }
   return false;

@@ -478,19 +478,34 @@ void syscall_exec(const char* cmd, struct intr_frame* f) {
  * Handle the wait syscall routine.
  * @pid, child's process id to wait for.
  */
-void syscall_wait(tid_t pid, struct intr_frame* f) { f->eax = process_wait(pid); }
+void syscall_wait(tid_t pid, struct intr_frame* f) { 
+  f->eax = process_wait(pid); 
+}
 
 
-
+/* HELPER FUNCTION
+ * Handle the mkdir syscall routine.
+ * @path, cpath to dir + name.
+ */
 void syscall_mkdir(char* path, struct intr_frame* f) {
   /* It is important to set the size=2 since we will add "." and ".." */
   f->eax = filesys_create(path, 2, 1);
 }
 
+
+/* HELPER FUNCTION
+ * Handle the chdir syscall routine.
+ * @name, new cwd
+ */
 void syscall_chdir(char* name, struct intr_frame *f) {
   f->eax = filesys_chdir(name);
 }
 
+/* HELPER FUNCTION
+ * Handle the readdir syscall routine.
+ * @fd, fd of the directory
+ * @name, buffer holds an entry from directory
+ */
 void syscall_readdir(int fd, char *name[NAME_MAX + 1], struct intr_frame *f) {
   struct file_descriptor *file_des = get_fd_struct(fd);
   if (file_des && file_des->f_ptr->inode->removed && file_des->is_dir) {
@@ -498,10 +513,12 @@ void syscall_readdir(int fd, char *name[NAME_MAX + 1], struct intr_frame *f) {
     return;
   }
   f->eax = dir_readdir((struct dir*)file_des->f_ptr, name);
-  //dir_close(file_des->f_ptr);
 }
 
-
+/* HELPER FUNCTION
+ * Handle the isdir syscall routine.
+ * @fd, fd of the directory
+ */
 void syscall_isdir(int fd, struct intr_frame *f) {
   struct file_descriptor *f_des = get_fd_struct(fd);
   if (!f_des)
@@ -509,6 +526,10 @@ void syscall_isdir(int fd, struct intr_frame *f) {
   f->eax = f_des->is_dir;
 }
 
+/* HELPER FUNCTION
+ * Handle the inumber syscall routine.
+ * @fd, fd of the directory/file
+ */
 void syscall_inumber(int fd, struct intr_frame *f) {
   struct file_descriptor *f_des = get_fd_struct(fd);
   if (!f_des)
