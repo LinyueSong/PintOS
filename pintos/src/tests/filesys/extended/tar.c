@@ -160,12 +160,10 @@ static bool write_header(const char* file_name, enum ustar_type type, int size, 
 }
 
 static bool do_write(int fd, const char* buffer, int size, bool* write_error) {
-  if (write(fd, buffer, size) == size) {
+  if (write(fd, buffer, size) == size)
     return true;
-  }
   else {
     if (!*write_error) {
-      msg("fd is: %d and the size is: %d, write error is: %d \n", fd, size, write(fd, buffer, size) == size);
       printf("error writing archive\n");
       *write_error = true;
     }
