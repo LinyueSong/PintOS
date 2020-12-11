@@ -6,9 +6,7 @@
 #include "filesys/inode.h"
 #include "threads/malloc.h"
 #include "threads/thread.h"
-#include "filesys/utils.h"
 
-bool remove_self_parent(struct dir *dir, struct inode *inode);
 /* Creates a directory with space for ENTRY_CNT entries in the
    given SECTOR.  Returns true if successful, false on failure. */
 bool dir_create(block_sector_t sector, size_t entry_cnt) {
@@ -166,7 +164,7 @@ bool dir_remove(struct dir* dir, const char* name) {
   struct inode_disk *ind_disk = (struct inode_disk*) malloc(sizeof(struct inode_disk));
   block_read_cached(fs_device, inode->sector, ind_disk, 0, sizeof(struct inode_disk));
   
-  /* Check if the only entries in directory are "." and "..". If yes we delete it. */
+  /* Check if the only entries in directory are "." and "..". If yes we can delete it. */
   if (ind_disk->is_dir) {
     struct dir *dir_delete = dir_open(inode);
     char d_name[NAME_MAX + 1];

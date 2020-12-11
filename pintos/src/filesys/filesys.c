@@ -8,15 +8,11 @@
 #include "filesys/inode.h"
 #include "filesys/directory.h"
 #include "threads/thread.h"
-#include "filesys/utils.h"
+#include "stdlib.h"
+
 
 /* Partition that contains the file system. */
 struct block* fs_device;
-
-static void do_format(void);
-bool split_path_to_directory(const char *path, struct split_path *pt);
-
-
 
 /* Initializes the file system module.
    If FORMAT is true, reformats the file system. */
@@ -42,12 +38,28 @@ void filesys_done(void) {
   free_map_close(); 
 }
 
+/* HELPER FUNCTION 
+ * Retunrs the directory in which we want to create a new file/directory
+ * @pt, path to the directory we create a new file/directory
+ */
+struct dir* get_path_to_dir(struct split_path *pt) {
+  struct dir* dir;
+  if (thread_current()->cwd == NULL) {
+    dir = dir_open_root();
+  } else if (!pt->path_to_dir) {
+    if (thread_current()->cwd->inode->removed)
+      return dir = NULL;
+    dir = dir_reopen(thread_current()->cwd);
+  } else {
+    dir= dir_open(walk_path(pt->path_to_dir));
+  }
+}
+
 /* Creates a file named NAME with the given INITIAL_SIZE.
    Returns true if successful, false otherwise.
    Fails if a file named NAME already exists,
    or if internal memory allocation fails. */
 bool filesys_create(const char* name, off_t initial_size, int is_dir) {
-
   block_sector_t inode_sector = 0;
   struct dir* dir;
   struct split_path *pt = (struct split_path*) malloc(sizeof(struct split_path));
@@ -56,15 +68,11 @@ bool filesys_create(const char* name, off_t initial_size, int is_dir) {
   if (!split_path_to_directory(name, pt) || strcmp(name, "") == 0)
     return false;
 
-  if (thread_current()->cwd == NULL)
-    dir = dir_open_root();
-  else if (!pt->path_to_dir) {
-    if (thread_current()->cwd->inode->removed)
-      return false;
-    dir = dir_reopen(thread_current()->cwd);
-  } else
-    dir= dir_open(walk_path(pt->path_to_dir));
-
+  /* Get dir we are removing the file/dir from */
+  dir = get_path_to_dir(pt);
+  if(dir == NULL)
+    return false;
+  
   /* Acquire a lock on the directory */
   lock_acquire(&dir->inode->dir_lock);
   
@@ -79,7 +87,7 @@ bool filesys_create(const char* name, off_t initial_size, int is_dir) {
   /* Release the lock on the directory */
   lock_release(&dir->inode->dir_lock);
 
-  /* If we create a new directory we add "." and ".." to it */
+  /* Add "." and ".." to if we created a new directory*/
   if (is_dir && success) {
     block_sector_t self = inode_sector;
     block_sector_t parent = dir->inode->sector;
@@ -112,17 +120,15 @@ struct file* filesys_open(const char* name) {
   if (!split_path_to_directory(name, pt))
     return false;
 
-  
-  if (thread_current()->cwd == NULL)
-    dir = dir_open_root();
-  else if (!pt->path_to_dir)
-    dir = dir_reopen(thread_current()->cwd);
-  else
-    dir= dir_open(walk_path(pt->path_to_dir));
-  
+  /* Get dir we are removing the file/dir from */
+  dir = get_path_to_dir(pt);
+  if(dir == NULL)
+    return NULL;
 
   if (dir != NULL)
     dir_lookup(dir, pt->new_dir_name, &inode);
+
+
   if (pt->path_to_dir && !strcmp(pt->new_dir_name, ".") && !strcmp(pt->path_to_dir, "/")) {
     inode = dir->inode;
   }
@@ -152,19 +158,16 @@ struct file* filesys_open(const char* name) {
    Fails if no file named NAME exists,
    or if an internal memory allocation fails. */
 bool filesys_remove(const char* name) {
-    struct dir* dir;//= dir_open_root();
+  struct dir* dir;
   struct split_path *pt = (struct split_path*) malloc(sizeof(struct split_path));
 
   /* Split name in path to dir and name of the file */
   if (!split_path_to_directory(name, pt))
     return false;
-  if (thread_current()->cwd == NULL)
-    dir = dir_open_root();
-  else if (!pt->path_to_dir)
-    dir = dir_reopen(thread_current()->cwd);
-  else
-    dir= dir_open(walk_path(pt->path_to_dir));
-
+  /* Get dir we are removing the file/dir from */
+  dir = get_path_to_dir(pt);
+  if(dir == NULL)
+    return false;
 
   bool success = dir != NULL && dir_remove(dir, pt->new_dir_name);
   dir_close(dir);
@@ -186,7 +189,7 @@ static void do_format(void) {
 }
 
 /* HELPER FUNCTION 
- * sets the file_des->is_dir based on what the inode is.
+ * Sets the struct filedescriptor is_dir based on what the inode is.
  */
 void set_is_dir(struct file_descriptor *file_des) {
   void *f_ptr = file_des->f_ptr;
@@ -211,9 +214,8 @@ struct inode *walk_path(char *name) {
     cur_dir = dir_open_root();
   else 
     cur_dir = dir_reopen(t->cwd);
-
+  
   struct inode *cur_inode = cur_dir->inode;
-
   while ((i = get_next_part(next_dir, &name)) != 0) {
     if (i == -1) {
       return NULL;
@@ -256,9 +258,11 @@ return 1;
 }
 
 
+/* HELPER FUNCTION
+ * Splits the path in new_name and path to dir
+ */
 bool split_path_to_directory(const char *path, struct split_path *pt) {
   bool success = false;
-
   if (!strchr(path, '/')) {
     pt->path_to_dir = NULL;
     pt->new_dir_name = (char*)malloc(sizeof(char) * (strlen(path) + 1));
@@ -283,6 +287,7 @@ bool split_path_to_directory(const char *path, struct split_path *pt) {
         dir_name = ptr;
       }
     }
+    /* Set the names accordingly */
     pt->new_dir_name = (char*) malloc(sizeof(char) * (size_of_dir + 1));
     pt->path_to_dir = (char*) malloc(sizeof(char) * (size_of_path + 1));
     memcpy(pt->path_to_dir, path, size_of_path);
@@ -290,6 +295,7 @@ bool split_path_to_directory(const char *path, struct split_path *pt) {
     pt->path_to_dir[size_of_path] = '\0';
     pt->new_dir_name[size_of_dir] = '\0';
 
+    /* If no name for new file, set the name to self: "." */
     if (!strcmp(pt->new_dir_name, "")) {
       free(pt->new_dir_name);
       pt->new_dir_name = (char*)malloc(sizeof(char) * 2);

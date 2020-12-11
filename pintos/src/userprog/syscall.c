@@ -10,7 +10,7 @@
 #include "pagedir.h"
 #include "threads/vaddr.h"
 #include "devices/shutdown.h"
-#include "filesys/utils.h"
+#include "filesys/inode.h"
 
 
 

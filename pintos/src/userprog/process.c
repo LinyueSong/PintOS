@@ -20,7 +20,8 @@
 #include "threads/thread.h"
 #include "threads/vaddr.h"
 #include "syscall.h"
-#include "filesys/utils.h"
+#include "filesys/inode.h"
+
 
 static thread_func start_process NO_RETURN;
 static bool load(const char* cmdline, void (**eip)(void), void** esp);
@@ -126,9 +127,6 @@ static void start_process(void* context_) {
   /* Set current working directory */
   if (thread_current()->cwd == NULL)
     thread_current()->cwd = dir_open_root();
-  // else {
-  //   thread_current()->cwd = dir_reopen(thread_current()->cwd);
-  // }
 
   /* Notify the parent process that loading is done */
   sema_up(&(context->sema));
@@ -240,21 +238,14 @@ void process_exit(void) {
   while (!list_empty(&cur->file_descriptors)) {
     e = list_pop_back(&cur->file_descriptors);
     struct file_descriptor* f = list_entry(e, struct file_descriptor, elem);
-    /* Proj3, check what are we closing and make a decision accordingly) */
+    /* Check what are we closing and make a decision accordingly) */
     if (f->is_dir && !f->f_ptr->inode->removed)
       dir_close((struct dir*)f->f_ptr);
     else if (!f->is_dir)
       file_close((struct file*)f->f_ptr);
     free(f);
   }
-
-  // if (cur->cwd->inode != NULL)
-  //   dir_close(cur->cwd);
-  
-
   sema_up(&cur->self->sema);
-
-
 }
 
 /* Sets up the CPU for running user code in the current
