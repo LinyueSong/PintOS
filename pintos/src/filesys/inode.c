@@ -58,7 +58,9 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
   block_sector_t* buffer = malloc(BLOCK_SECTOR_SIZE);
   block_sector_t result = 0;
   /* Traverse pointers to find the corresponding sector based on the position */
-  if (pos < DIRECT_MAX) {
+  if (pos > DOUBLE_MAX) {
+    result = 0;
+  } else if (pos < DIRECT_MAX) {
     result = di->direct[pos / BLOCK_SECTOR_SIZE];
   } else if (pos < INDIRECT_MAX) {
     if (di->indirect != 0) {
@@ -68,18 +70,16 @@ static block_sector_t byte_to_sector(const struct inode* inode, off_t pos) {
   } else if (pos < DOUBLE_MAX) {
     if (di->double_indirect != 0) {
      block_read_cached(fs_device, di->double_indirect, buffer, 0, BLOCK_SECTOR_SIZE);
-     block_sector_t sector = buffer[(pos - INDIRECT_MAX) / BLOCK_SECTOR_SIZE/(BLOCK_SECTOR_SIZE/sizeof(block_sector_t))]; 
+     block_sector_t sector = buffer[(pos - 128512) / BLOCK_SECTOR_SIZE / 128]; 
       if (sector != 0) {
-        block_read_cached(fs_device, sector, buffer, 0, BLOCK_SECTOR_SIZE); 
-        result =  buffer[((pos - INDIRECT_MAX) / BLOCK_SECTOR_SIZE) % (BLOCK_SECTOR_SIZE/sizeof(block_sector_t))];
+        block_read_cached(fs_device, sector, buffer, 0, BLOCK_SECTOR_SIZE);
+        result =  buffer[(pos - INDIRECT_MAX) / BLOCK_SECTOR_SIZE % 128];
       }
     }
   } 
   free(di);
   free(buffer);
   lock_release(&inode->lookup_lock);
-
-
   return result;
 }
 bool inode_resize_unsafe(block_sector_t id_sector, off_t size);
@@ -94,6 +94,10 @@ bool inode_resize(struct inode* inode, off_t size) {
 
 /* Function to resize the inode_disk. May expand or shrink. */
 bool inode_resize_unsafe(block_sector_t id_sector, off_t size) {
+  /* Return if size is too large */
+  if (size > DOUBLE_MAX) {
+    return false;
+  }
   static int zeros[BLOCK_SECTOR_SIZE];
   struct inode_disk * id = malloc(BLOCK_SECTOR_SIZE);
   block_read_cached(fs_device, id_sector, id, 0, BLOCK_SECTOR_SIZE);
@@ -108,7 +112,6 @@ bool inode_resize_unsafe(block_sector_t id_sector, off_t size) {
     /* Expand */
     if (size > 512 * i && id->direct[i] == 0) {
       if (!free_map_allocate(1, &sector)) {
-      block_write_cached(fs_device, id_sector, id, 0, BLOCK_SECTOR_SIZE);
       inode_resize_unsafe(id_sector, id->length);
       free(id);
       return false;
@@ -150,8 +153,6 @@ bool inode_resize_unsafe(block_sector_t id_sector, off_t size) {
     /* Expand */
     if (size > (123 + i) * 512 && buffer[i] == 0) {
       if (!free_map_allocate(1, &sector)) { // Handle failure
-        block_write_cached(fs_device, id_sector, id, 0, BLOCK_SECTOR_SIZE);
-        block_write_cached(fs_device, id->indirect, buffer, 0, BLOCK_SECTOR_SIZE);
         inode_resize_unsafe(id_sector, id->length);
         free(buffer);
         free(id);
@@ -161,11 +162,20 @@ bool inode_resize_unsafe(block_sector_t id_sector, off_t size) {
       buffer[i] = sector;
     }
   }
+  if (id->indirect != 0 && size <= DIRECT_MAX) {
+    free_map_release(id->indirect, 1);
+    id->length = size;
+    block_write_cached(fs_device, id_sector, id, 0, BLOCK_SECTOR_SIZE);
+    free(buffer);
+    free(id);
+    return true;
+  } else {
+    block_write_cached(fs_device, id->indirect, buffer, 0, BLOCK_SECTOR_SIZE);
+  }
   /* If direct & indirect pointer are sufficient, return */
   if (id->double_indirect == 0 && size <= INDIRECT_MAX) {
     id->length = size;
     block_write_cached(fs_device, id_sector, id, 0, BLOCK_SECTOR_SIZE);
-    block_write_cached(fs_device, id->indirect, buffer, 0, BLOCK_SECTOR_SIZE);
     free(buffer);
     free(id);
     return true;
@@ -191,9 +201,13 @@ bool inode_resize_unsafe(block_sector_t id_sector, off_t size) {
   for (int i = 0; i < 128; i++) {
     /* Return if all required space has been satisfied. */
     if (buffer[i] == 0 && size <= INDIRECT_MAX + i * 128 * 512) {
-      block_write_cached(fs_device, id_sector, id, 0, BLOCK_SECTOR_SIZE);
-      block_write_cached(fs_device, id->indirect, buffer, 0, BLOCK_SECTOR_SIZE);
+      if (i == 0) {
+        free_map_release(id->double_indirect, 1);
+      } else {
+        block_write_cached(fs_device, id->double_indirect, buffer, 0, BLOCK_SECTOR_SIZE);
+      }
       id->length = size;
+      block_write_cached(fs_device, id_sector, id, 0, BLOCK_SECTOR_SIZE);
       free(buffer);
       free(id);
       free(buffer2);
@@ -267,7 +281,7 @@ bool inode_create(block_sector_t sector, off_t length, int is_dir) {
 
   disk_inode = calloc(1, sizeof *disk_inode);
   if (disk_inode != NULL) {
-    disk_inode->length = length;
+    disk_inode->length = 0;
     disk_inode->magic = INODE_MAGIC;
     disk_inode->is_dir = is_dir;
     block_write_cached(fs_device, sector, disk_inode, 0, BLOCK_SECTOR_SIZE);
@@ -418,14 +432,12 @@ off_t inode_write_at(struct inode* inode, const void* buffer_, off_t size, off_t
   inode->writers++;
   lock_release(&inode->dny_w_lock);
 
-  if (inode_length(inode) < offset + size) {
+  if (inode_length(inode) <= offset + size) {
     inode_resize(inode, size + offset);
   }
   while (size > 0) {
     /* Sector to write, starting byte offset within sector. */
     block_sector_t sector_idx = byte_to_sector(inode, offset);
-    if (sector_idx > 30000)
-      PANIC("idx sector is too big\n\n\n");
     int sector_ofs = offset % BLOCK_SECTOR_SIZE;
 
     /* Bytes left in inode, bytes left in sector, lesser of the two. */

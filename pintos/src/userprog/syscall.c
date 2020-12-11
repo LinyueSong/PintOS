@@ -295,6 +295,7 @@ void syscall_close(int fd, struct intr_frame* f) {
  * @ f, interrupt frame
  */
 void syscall_write(int fd, const void* buffer, unsigned size, struct intr_frame* f) {
+  struct file* f_ptr;
   if (!check_addr(buffer, size)) {
     syscall_exit(-1, f);
   }
@@ -305,7 +306,7 @@ void syscall_write(int fd, const void* buffer, unsigned size, struct intr_frame*
     f->eax = size;
     return;
   } else {
-    struct file* f_ptr = get_f_ptr(fd);
+    f_ptr = get_f_ptr(fd);
     if (f_ptr == NULL || get_fd_struct(fd)->is_dir) { /* File is not openned or is a directory */
       f->eax = -1;
       syscall_exit(-1, f);
@@ -313,6 +314,7 @@ void syscall_write(int fd, const void* buffer, unsigned size, struct intr_frame*
     f->eax = file_write(f_ptr, buffer, size);
   }
 }
+
 
 /* HELPER FUNCTION
  * Handles the read function.
