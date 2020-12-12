@@ -31,6 +31,7 @@ enum {
   SYS_INUMBER,  /* Returns the inode number for a fd. */
   SYS_HITRATE,  /* Returns the number of cache hits */
   SYS_FLUSHCACHE, /* Flush the cache */
+  SYS_BLOCKWCNT /* Get the block write cnt */
 };
 
 #endif /* lib/syscall-nr.h */

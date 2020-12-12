@@ -3,9 +3,9 @@ use strict;
 use warnings;
 use tests::tests;
 check_expected ([<<'EOF']);
-(cache-hit) begin
-(cache-hit) success
-(cache-hit) end
+(coalesce) begin
+(coalesce) success
+(coalesce) end
 cache-hit: exit(0)
 EOF
 pass;

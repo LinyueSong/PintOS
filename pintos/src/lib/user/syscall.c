@@ -62,8 +62,12 @@ int hit_rate(void) {
   return syscall0(SYS_HITRATE);
 }
 
-void flush_cache(void) {
-  syscall0(SYS_FLUSHCACHE);
+int flush_cache(void) {
+  return syscall0(SYS_FLUSHCACHE);
+}
+
+unsigned long long get_block_wcnt(void) {
+  return syscall0(SYS_BLOCKWCNT);
 }
 
 void exit(int status) {

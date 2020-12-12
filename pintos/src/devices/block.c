@@ -170,3 +170,12 @@ static struct block* list_elem_to_block(struct list_elem* list_elem) {
   return (list_elem != list_end(&all_blocks) ? list_entry(list_elem, struct block, list_elem)
                                              : NULL);
 }
+
+/* Return the write_cnt of the first block device */
+unsigned long long get_block_write_cnt(void) {
+  struct block* block = block_by_role[0];
+  if (block != NULL) {
+    return block->write_cnt;
+  }
+  return 0;
+}

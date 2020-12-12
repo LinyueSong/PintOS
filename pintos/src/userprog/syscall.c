@@ -12,8 +12,7 @@
 #include "devices/shutdown.h"
 #include "filesys/inode.h"
 #include "filesys/cache.h"
-
-
+#include "devices/block.h"
 
 static void syscall_handler(struct intr_frame*);
 void syscall_create(const char* file, unsigned initial_size, struct intr_frame* f);
@@ -173,7 +172,10 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       syscall_hitrate(f);
       break;
     case SYS_FLUSHCACHE:
-      flush_cache();
+      syscall_flush_cache(f);
+      break;
+    case SYS_BLOCKWCNT:
+      syscall_block_wcnt(f);
       break;
     default:
       /* PANIC? */
@@ -542,10 +544,20 @@ void syscall_inumber(int fd, struct intr_frame *f) {
 /* HELPER FUNCTION 
  * Return the cache hit rate and clear the cache.
  */
-
 void syscall_hitrate(struct intr_frame *f) {
   f->eax = hit_rate();
 }
 
+/* HELPER FUNCTION
+Flush the cache */
+syscall_flush_cache(struct intr_frame *f) {
+  flush_cache();
+  f->eax = 1;
+}
 
+/* HELPER FUNCTION
+Get the block write count */
+syscall_block_wcnt(struct intr_frame *f) {
+  f->eax = get_block_write_cnt();
+}
 

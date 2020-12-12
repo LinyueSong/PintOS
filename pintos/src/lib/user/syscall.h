@@ -46,6 +46,7 @@ bool readdir(int fd, char name[READDIR_MAX_LEN + 1]);
 bool isdir(int fd);
 int inumber(int fd);
 int hit_rate(void);
-void flush_cache(void);
+int flush_cache(void);
+unsigned long long get_block_wcnt(void);
 
 #endif /* lib/user/syscall.h */

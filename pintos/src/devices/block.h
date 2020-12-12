@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <inttypes.h>
 
+unsigned long long get_block_write_cnt(void);
 /* Size of a block device sector in bytes.
    All IDE disks use this sector size, as do most USB and SCSI
    disks.  It's not worth it to try to cater to other sector

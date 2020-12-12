@@ -3,24 +3,27 @@
 #include <syscall.h>
 #include "tests/lib.h"
 #include "tests/main.h"
+#include <random.h>
 
 char buf1[512 * 2];
 
 void test_main(void) {
   int fd;
-  create("cache_hit_test_file.txt", sizeof(buf1));
-  memset(buf1, 2, 400);
-  fd = open("cache_hit_test_file.txt");
+  create("test.txt", sizeof(buf1));
+  random_bytes(buf1, sizeof(buf1));
+  fd = open("test.txt");
   write(fd, buf1, sizeof(buf1));
   close(fd);
   flush_cache();
-  fd = open("cache_hit_test_file.txt");
+  fd = open("test.txt");
   read(fd, buf1, sizeof(buf1));
   close(fd);
-  int cold_hit_rate = hit_rate();
-  fd = open("cache_hit_test_file.txt");
+  int cold_hits = hit_rate();
+  fd = open("test.txt");
   read(fd, buf1, sizeof(buf1));
   close(fd);
-  int hot_hit_rate = hit_rate();
-  msg(cold_hit_rate > hot_hit_rate);
+  int hot_hits = hit_rate();
+  if (cold_hits < hot_hits) {
+    msg("success");
+  }
 }

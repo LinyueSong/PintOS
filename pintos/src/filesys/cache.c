@@ -29,6 +29,7 @@ void flush_cache() {
     list_remove(&entry->elem);
     block_write(fs_device, entry->sector, entry->data);
   }
+  hits = 0;
 }
 
 /* Initializes the inode module. */
