@@ -6,7 +6,6 @@
 
 struct inode;
 
-
 /* An open file. */
 struct file {
   struct inode* inode; /* File's inode. */
