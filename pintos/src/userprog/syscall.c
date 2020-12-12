@@ -12,8 +12,6 @@
 #include "devices/shutdown.h"
 #include "filesys/inode.h"
 
-
-
 static void syscall_handler(struct intr_frame*);
 void syscall_create(const char* file, unsigned initial_size, struct intr_frame* f);
 void syscall_remove(const char* file, struct intr_frame* f);
@@ -229,9 +227,6 @@ void syscall_open(const char* file, struct intr_frame* f) {
 
   if (file_des->is_dir)
     dir_open(file_des->f_ptr->inode);
-
-
-
   
   file_des->fd = thread_current()->next_fd++;
   list_push_back(&(thread_current()->file_descriptors), &(file_des->elem));
@@ -331,7 +326,7 @@ void syscall_read(int fd, void* buffer, unsigned size, struct intr_frame* f) {
     syscall_exit(-1, f);
   }
   struct file* f_ptr = get_f_ptr(fd);
-  if (!f_ptr || fd == 1) {
+  if (!f_ptr || fd == 1 || get_fd_struct(fd)->is_dir) {
     f->eax = -1;
     syscall_exit(-1, f);
   }
@@ -536,8 +531,3 @@ void syscall_inumber(int fd, struct intr_frame *f) {
     f->eax = false;
   f->eax = inode_get_inumber(f_des->f_ptr->inode);
 }
-
-
-
-
-
