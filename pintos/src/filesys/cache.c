@@ -21,6 +21,7 @@ struct lock cache_lookup_lock;
 struct list cache;
 int hits;
 
+/* Flush the cache entries to disk. Clear the cache. */
 void flush_cache() {
   struct list_elem* e;
   for (e = list_begin(&cache);
@@ -39,12 +40,14 @@ void cache_init(void) {
   hits = 0;
 }
 
+/* Read cache entry */
 void block_read_cached(struct block* b, block_sector_t sec, void* buffer, int offset, int size) {
   struct cache_entry* cache = get_cache_entry(b, sec);
   memcpy(buffer, cache->data + offset, size);
   lock_release(&cache->lck);
 }
 
+/* Write to cache entry */
 void block_write_cached(struct block* b, block_sector_t sec, void* buffer, int offset, int size) {
   struct cache_entry* cache = get_cache_entry(b, sec);
   memcpy(cache->data + offset, buffer, size);
@@ -52,6 +55,8 @@ void block_write_cached(struct block* b, block_sector_t sec, void* buffer, int o
   lock_release(&cache->lck);
 }
 
+/* Get the cache entry. Move it to the front of the cache. Read from the disk if 
+the entry doesn't exist. */
 struct cache_entry* get_cache_entry(struct block* b, block_sector_t sec) {
   lock_acquire(&cache_lookup_lock);
   struct list_elem* e;
@@ -79,6 +84,7 @@ struct cache_entry* get_cache_entry(struct block* b, block_sector_t sec) {
   return entry;
 }
 
+/* Evict cache entry and flush it to disk */
 void LRU_evict(struct block* block) {
   if (list_size(&cache) == MAXSIZE) {
     /* ensure nobody reads/write on last entry */
@@ -92,6 +98,7 @@ void LRU_evict(struct block* block) {
   }
 }
 
+/* Return the number of cache hits so far. Used for tests. */
 int hit_rate() {
   int result = hits;
   hits = 0;
