@@ -38,10 +38,6 @@ void flush_cache() {
   }
 }
 
-
-
-
-
 /* Initializes the inode module. */
 void cache_init(void) {
   list_init(&cache);
