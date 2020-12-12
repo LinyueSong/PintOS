@@ -10,23 +10,16 @@
 #include "threads/synch.h"
 
 #define MAXSIZE 64
-struct cache_entry* get_cache_entry(
-    struct block* b,
-    block_sector_t
-        sec); /* Returns the cache entry given a sector, if it is not in the cache we bring it in and evict another entry if necessary. */
-void LRU_evict(struct block*);
+/* Returns the cache entry given a sector, 
+if it is not in the cache we bring it in 
+and evict another entry if necessary. */
+struct cache_entry* get_cache_entry( struct block* b, block_sector_t sec); 
 
-struct cache_entry {
-  struct list_elem elem;
-  int dirty_bit;
-  block_sector_t sector;
-  struct lock lck;
-  char data[512];
-};
+void LRU_evict(struct block*);
 
 struct lock cache_lookup_lock;
 struct list cache;
-
+int hits;
 
 void flush_cache() {
   struct list_elem* e;
@@ -42,13 +35,13 @@ void flush_cache() {
 void cache_init(void) {
   list_init(&cache);
   lock_init(&cache_lookup_lock);
+  hits = 0;
 }
 
 void block_read_cached(struct block* b, block_sector_t sec, void* buffer, int offset, int size) {
   struct cache_entry* cache = get_cache_entry(b, sec);
   memcpy(buffer, cache->data + offset, size);
   lock_release(&cache->lck);
-  //block_read(b, sec, buffer);
 }
 
 void block_write_cached(struct block* b, block_sector_t sec, void* buffer, int offset, int size) {
@@ -56,7 +49,6 @@ void block_write_cached(struct block* b, block_sector_t sec, void* buffer, int o
   memcpy(cache->data + offset, buffer, size);
   cache->dirty_bit = 1;
   lock_release(&cache->lck);
-  //block_write(b, sec, buffer+offset);
 }
 
 struct cache_entry* get_cache_entry(struct block* b, block_sector_t sec) {
@@ -70,6 +62,7 @@ struct cache_entry* get_cache_entry(struct block* b, block_sector_t sec) {
       list_push_front(&cache, e);
       lock_acquire(&entry->lck);
       lock_release(&cache_lookup_lock);
+      hits++;
       return entry;
     }
   }
@@ -96,4 +89,10 @@ void LRU_evict(struct block* block) {
       block_write(block, entry->sector, entry->data);
     free(entry);
   }
+}
+
+int hit_rate() {
+  int result = hits;
+  hits = 0;
+  return result;
 }

@@ -11,6 +11,7 @@
 #include "threads/vaddr.h"
 #include "devices/shutdown.h"
 #include "filesys/inode.h"
+#include "filesys/cache.h"
 
 
 
@@ -168,7 +169,12 @@ static void syscall_handler(struct intr_frame* f UNUSED) {
       }
       syscall_inumber((int)args[1], f);
       break;
-
+    case SYS_HITRATE:
+      syscall_hitrate(f);
+      break;
+    case SYS_FLUSHCACHE:
+      flush_cache();
+      break;
     default:
       /* PANIC? */
       syscall_exit(-1, f);
@@ -533,7 +539,13 @@ void syscall_inumber(int fd, struct intr_frame *f) {
   f->eax = inode_get_inumber(f_des->f_ptr->inode);
 }
 
+/* HELPER FUNCTION 
+ * Return the cache hit rate and clear the cache.
+ */
 
+void syscall_hitrate(struct intr_frame *f) {
+  f->eax = hit_rate();
+}
 
 
 

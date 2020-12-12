@@ -58,6 +58,14 @@ void halt(void) {
   NOT_REACHED();
 }
 
+int hit_rate(void) {
+  return syscall0(SYS_HITRATE);
+}
+
+void flush_cache(void) {
+  syscall0(SYS_FLUSHCACHE);
+}
+
 void exit(int status) {
   syscall1(SYS_EXIT, status);
   NOT_REACHED();
